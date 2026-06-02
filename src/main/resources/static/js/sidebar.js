@@ -31,6 +31,8 @@
       const currentRoomId     = ref(null);
       /** 프로필 드롭다운 표시 여부 */
       const isProfileMenuOpen = ref(false);
+      /** 다크 모드 활성화 여부 */
+      const isDarkMode        = ref(false);
 
       let _searchTimer = null;
 
@@ -141,6 +143,32 @@
         isProfileMenuOpen.value = !isProfileMenuOpen.value;
       }
 
+      // ── 다크 모드 제어 ─────────────────────────────────
+
+      /**
+       * 다크 모드를 초기화합니다.
+       * localStorage에 저장된 값을 읽어 <html> 요소에 'dark' 클래스를 적용합니다.
+       * Tailwind darkMode: 'class' 설정과 연동됩니다.
+       */
+      function initDarkMode() {
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        // 저장 값이 없으면 OS 설정을 따름
+        const shouldBeDark = saved ? saved === 'dark' : prefersDark;
+        isDarkMode.value = shouldBeDark;
+        document.documentElement.classList.toggle('dark', shouldBeDark);
+      }
+
+      /**
+       * 다크/라이트 모드를 전환합니다.
+       * <html> 요소의 'dark' 클래스를 토글하고 localStorage에 저장합니다.
+       */
+      function toggleDarkMode() {
+        isDarkMode.value = !isDarkMode.value;
+        document.documentElement.classList.toggle('dark', isDarkMode.value);
+        localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light');
+      }
+
       // 프로필 메뉴 외부 클릭 시 자동 닫기
       document.addEventListener('click', function (e) {
         const btn  = document.getElementById('profileBtn');
@@ -157,20 +185,25 @@
         loadRooms();
       });
 
-      // ── 마운트 시 초기 목록 로드 ──────────────────────
-      onMounted(loadRooms);
+      // ── 마운트 시 초기화 ───────────────────────────────
+      onMounted(() => {
+        initDarkMode();
+        loadRooms();
+      });
 
       return {
         rooms,
         isLoading,
         currentRoomId,
         isProfileMenuOpen,
+        isDarkMode,
         debounceSearch,
         openRoom,
         newChat,
         deleteRoom,
         toggleSidebar,
         toggleProfileMenu,
+        toggleDarkMode,
       };
     }
   }).mount('#sidebar');

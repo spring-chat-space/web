@@ -44,6 +44,7 @@ public class SecurityConfig {
     /**
      * HTTP 보안 필터 체인 구성.
      * - /vendor/**, /css/**, /js/**, /common-ui/**, /login, /signup : 인증 없이 허용
+     * - /admin/**, /api/admin/** : ROLE_ADMIN 권한 필요
      * - 그 외 모든 요청 : 인증 필수, 미인증 시 /login으로 리다이렉트
      * - 로그아웃 : 세션 초기화 후 /login으로 리다이렉트
      * - 동시 세션 : 계정당 1개 제한, 만료된 세션은 /login?expired=true로 리다이렉트
@@ -57,13 +58,16 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/vendor/**", "/css/**", "/js/**", "/common-ui/**", "/login", "/signup", "/public/**").permitAll()
-                // 관리자 전용 API는 ADMIN 권한 필요
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // 관리자 전용 페이지 및 API는 ADMIN 권한 필요
+                .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) ->
                     response.sendRedirect("/login"))
+                // 권한 부족(403) 시 메인 페이지로 리다이렉트
+                .accessDeniedHandler((request, response, accessDeniedException) ->
+                    response.sendRedirect("/"))
             )
             .sessionManagement(session -> session
                 // 계정당 최대 1개 세션 허용 (새 로그인 시 기존 세션 만료)

@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사용자 관리 - Chat Space</title>
+  <script src="/vendor/tailwindcss.js"></script>
+  <link rel="stylesheet" href="/css/chat.css">
+  <script src="/vendor/vue.global.prod.js"></script>
+  <script src="/vendor/axios.min.js"></script>
+  <script src="/common-ui/common-ui.umd.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            sidebar: "#f0f4f9",
+            "sidebar-hover": "#e2e8f4",
+            "sidebar-active": "#d3e3fd",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Vue 마운트 전 깜빡임 방지 */
+    [v-cloak] { display: none; }
+
+    /* 모달 열릴 때 배경 스크롤 방지 */
+    body.modal-open { overflow: hidden; }
+  </style>
+</head>
+<body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
+
+  <!-- 사이드바 프래그먼트 -->
+  <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+
+  <!-- 사이드바 접혔을 때 펼치기 버튼 -->
+  <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
+          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+    </svg>
+  </button>
+
+  <!-- ====== Vue 앱 영역 (사용자 관리 메인 콘텐츠) ====== -->
+  <main id="adminApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
+
+    <!-- 페이지 헤더 -->
+    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">사용자 관리</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">전체 사용자 목록을 조회하고 관리합니다.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-gray-400 dark:text-gray-500" v-text="totalCount > 0 ? `총 ${totalCount}명` : ''"></span>
+          <button @click="openCreateModal"
+                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            계정 추가
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 검색/필터 바 -->
+    <div class="px-8 py-4 bg-white dark:bg-[#131314] border-b border-gray-100 dark:border-gray-800">
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- 키워드 검색 -->
+        <div class="relative flex-1 min-w-48">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+               fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" placeholder="아이디, 이름 검색"
+                 v-model="searchKeyword"
+                 @keydown.enter="handleSearch"
+                 class="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#1e1f20] text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 dark:focus:border-blue-500 transition-all"/>
+        </div>
+
+        <!-- 권한 필터 -->
+        <select v-model="searchRole"
+                class="py-2 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#1e1f20] text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all">
+          <option value="">전체 권한</option>
+          <option value="ROLE_USER">일반 사용자</option>
+          <option value="ROLE_ADMIN">관리자</option>
+        </select>
+
+        <!-- 상태 필터 -->
+        <select v-model="searchStatus"
+                class="py-2 px-3 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#1e1f20] text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all">
+          <option value="">전체 상태</option>
+          <option value="active">활성</option>
+          <option value="inactive">비활성</option>
+          <option value="locked">잠금</option>
+        </select>
+
+        <!-- 검색 버튼 -->
+        <button @click="handleSearch"
+                class="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+          검색
+        </button>
+
+        <!-- 초기화 버튼 -->
+        <button @click="resetSearch"
+                class="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a2b2c] rounded-lg transition-colors">
+          초기화
+        </button>
+      </div>
+    </div>
+
+    <!-- 테이블 영역 (스크롤 가능) -->
+    <div class="flex-1 overflow-auto px-8 py-4 bg-gray-50 dark:bg-[#0e0e0f]">
+
+      <!-- 로딩 상태 -->
+      <div v-if="isLoading" class="flex items-center justify-center py-20">
+        <div class="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+
+      <!-- 빈 상태 -->
+      <div v-else-if="users.length === 0"
+           class="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
+        <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <p class="text-sm">조회된 사용자가 없습니다.</p>
+      </div>
+
+      <!-- 사용자 목록 테이블 -->
+      <div v-else class="bg-white dark:bg-[#1e1f20] rounded-xl border border-gray-200 dark:border-gray-700/50 overflow-hidden shadow-sm">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/80 dark:bg-[#161617]">
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">아이디</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">이름</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">이메일</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">전화번호</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">권한</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">상태</th>
+              <th class="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">등록일</th>
+              <th class="text-center px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">액션</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-700/30">
+            <tr v-for="user in users" :key="user.adminId"
+                class="hover:bg-gray-50/60 dark:hover:bg-[#252627] transition-colors">
+              <td class="px-5 py-3.5">
+                <span class="font-mono text-xs text-gray-600 dark:text-gray-300"
+                      v-text="user.adminId"></span>
+              </td>
+              <td class="px-5 py-3.5 font-medium text-gray-800 dark:text-gray-100"
+                  v-text="user.adminName"></td>
+              <td class="px-5 py-3.5 text-gray-600 dark:text-gray-300"
+                  v-text="user.email"></td>
+              <td class="px-5 py-3.5 text-gray-500 dark:text-gray-400"
+                  v-text="user.phoneNumber || '-'"></td>
+              <!-- 권한 뱃지 -->
+              <td class="px-5 py-3.5">
+                <span :class="user.role === 'ROLE_ADMIN'
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-300'"
+                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      v-text="user.role === 'ROLE_ADMIN' ? '관리자' : '일반 사용자'">
+                </span>
+              </td>
+              <!-- 상태 뱃지 -->
+              <td class="px-5 py-3.5">
+                <span :class="{
+                    'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300': user.status === 'active',
+                    'bg-gray-100 text-gray-500 dark:bg-gray-700/50 dark:text-gray-400': user.status === 'inactive',
+                    'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400': user.status === 'locked'
+                  }"
+                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      v-text="statusLabel(user.status)">
+                </span>
+              </td>
+              <td class="px-5 py-3.5 text-gray-500 dark:text-gray-400 text-xs"
+                  v-text="formatDate(user.createdAt)"></td>
+              <!-- 액션 버튼 -->
+              <td class="px-5 py-3.5">
+                <div class="flex items-center justify-center gap-1.5">
+                  <!-- 수정 -->
+                  <button @click="openEditModal(user.adminId)"
+                          title="수정"
+                          class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                  </button>
+                  <!-- 잠금 해제 (locked 상태일 때만) -->
+                  <button v-if="user.status === 'locked'"
+                          @click="handleUnlock(user.adminId)"
+                          title="잠금 해제"
+                          class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                    </svg>
+                  </button>
+                  <!-- 비밀번호 초기화 -->
+                  <button @click="handleResetPassword(user.adminId)"
+                          title="비밀번호 초기화"
+                          class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                    </svg>
+                  </button>
+                  <!-- 삭제 -->
+                  <button @click="handleDelete(user.adminId)"
+                          title="삭제"
+                          class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <div v-if="totalPages > 1" class="flex items-center justify-center gap-1.5 mt-5">
+        <!-- 이전 버튼 -->
+        <button @click="goToPage(currentPage - 1)"
+                :disabled="currentPage === 0"
+                class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a2b2c] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          이전
+        </button>
+
+        <!-- 페이지 번호 -->
+        <template v-for="n in paginationRange" :key="n">
+          <span v-if="n === '...'" class="px-2 text-gray-400 dark:text-gray-600">…</span>
+          <button v-else
+                  @click="goToPage(n - 1)"
+                  :class="currentPage === n - 1
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a2b2c]'"
+                  class="w-9 h-9 flex items-center justify-center text-sm rounded-lg border transition-colors"
+                  v-text="n">
+          </button>
+        </template>
+
+        <!-- 다음 버튼 -->
+        <button @click="goToPage(currentPage + 1)"
+                :disabled="currentPage >= totalPages - 1"
+                class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a2b2c] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          다음
+        </button>
+      </div>
+    </div>
+
+    <!-- ====== 사용자 수정 모달 ====== -->
+    <div v-if="showEditModal"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @click.self="closeEditModal">
+      <!-- 오버레이 배경 -->
+      <div class="absolute inset-0 bg-black/50 dark:bg-black/70"></div>
+
+      <!-- 모달 패널 -->
+      <div class="relative w-full max-w-lg bg-white dark:bg-[#1e1f20] rounded-2xl shadow-2xl overflow-hidden">
+        <!-- 모달 헤더 -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700/50">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">사용자 정보 수정</h2>
+          <button @click="closeEditModal"
+                  class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2a2b2c] transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 모달 바디 -->
+        <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+
+          <!-- 아이디 (읽기 전용) -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">아이디</label>
+            <input type="text" :value="editForm.adminId" readonly
+                   class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#161617] text-gray-400 dark:text-gray-500 cursor-not-allowed"/>
+          </div>
+
+          <!-- 이름 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              이름 <span class="text-red-500">*</span>
+            </label>
+            <input type="text" v-model="editForm.adminName" placeholder="이름을 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="editErrors.adminName ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="editErrors.adminName" class="mt-1 text-xs text-red-500"
+               v-text="editErrors.adminName"></p>
+          </div>
+
+          <!-- 이메일 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              이메일 <span class="text-red-500">*</span>
+            </label>
+            <input type="email" v-model="editForm.email" placeholder="이메일을 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="editErrors.email ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="editErrors.email" class="mt-1 text-xs text-red-500"
+               v-text="editErrors.email"></p>
+          </div>
+
+          <!-- 전화번호 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">전화번호</label>
+            <input type="text" v-model="editForm.phoneNumber" placeholder="010-0000-0000"
+                   class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"/>
+          </div>
+
+          <!-- 권한 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              권한 <span class="text-red-500">*</span>
+            </label>
+            <select v-model="editForm.role"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all">
+              <option value="ROLE_USER">일반 사용자</option>
+              <option value="ROLE_ADMIN">관리자</option>
+            </select>
+          </div>
+
+          <!-- 계정 상태 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              계정 상태 <span class="text-red-500">*</span>
+            </label>
+            <select v-model="editForm.useYn"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all">
+              <option value="Y">활성 (Y)</option>
+              <option value="N">비활성 (N)</option>
+            </select>
+          </div>
+
+          <!-- 서버 에러 메시지 -->
+          <p v-if="editServerError" class="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg"
+             v-text="editServerError"></p>
+        </div>
+
+        <!-- 모달 푸터 -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-[#161617]">
+          <button @click="closeEditModal"
+                  :disabled="isSubmitting"
+                  class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors disabled:opacity-50">
+            취소
+          </button>
+          <button @click="saveUser"
+                  :disabled="isSubmitting"
+                  class="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            <div v-if="isSubmitting" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span v-text="isSubmitting ? '저장 중...' : '저장'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 임시 비밀번호 모달 ====== -->
+    <div v-if="showPasswordModal"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @click.self="showPasswordModal = false">
+      <div class="absolute inset-0 bg-black/50 dark:bg-black/70"></div>
+
+      <div class="relative w-full max-w-sm bg-white dark:bg-[#1e1f20] rounded-2xl shadow-2xl overflow-hidden">
+        <div class="px-6 pt-6 pb-5 text-center">
+          <!-- 성공 아이콘 -->
+          <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">비밀번호 초기화 완료</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">사용자에게 아래 임시 비밀번호를 안전하게 전달하세요.</p>
+
+          <!-- 임시 비밀번호 표시 -->
+          <div class="flex items-center gap-2 bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
+            <code class="flex-1 text-center text-base font-mono font-bold text-blue-600 dark:text-blue-400 tracking-wider"
+                  v-text="tempPassword"></code>
+            <button @click="copyPassword"
+                    class="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                    title="복사">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+            </button>
+          </div>
+          <p v-if="passwordCopied" class="mt-2 text-xs text-green-600 dark:text-green-400">클립보드에 복사되었습니다.</p>
+        </div>
+        <div class="px-6 pb-5 flex justify-center">
+          <button @click="showPasswordModal = false"
+                  class="px-6 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 계정 추가 모달 ====== -->
+    <div v-if="showCreateModal"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @click.self="closeCreateModal">
+      <div class="absolute inset-0 bg-black/50 dark:bg-black/70"></div>
+
+      <div class="relative w-full max-w-lg bg-white dark:bg-[#1e1f20] rounded-2xl shadow-2xl overflow-hidden">
+        <!-- 헤더 -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700/50">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">계정 추가</h2>
+          <button @click="closeCreateModal"
+                  class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2a2b2c] transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 바디 -->
+        <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <!-- 아이디 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              아이디 <span class="text-red-500">*</span>
+            </label>
+            <input type="text" v-model="createForm.adminId" placeholder="아이디를 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="createErrors.adminId ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="createErrors.adminId" class="mt-1 text-xs text-red-500" v-text="createErrors.adminId"></p>
+          </div>
+
+          <!-- 비밀번호 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              비밀번호 <span class="text-red-500">*</span>
+            </label>
+            <input type="password" v-model="createForm.password" placeholder="8자 이상 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="createErrors.password ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="createErrors.password" class="mt-1 text-xs text-red-500" v-text="createErrors.password"></p>
+          </div>
+
+          <!-- 이름 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              이름 <span class="text-red-500">*</span>
+            </label>
+            <input type="text" v-model="createForm.adminName" placeholder="이름을 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="createErrors.adminName ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="createErrors.adminName" class="mt-1 text-xs text-red-500" v-text="createErrors.adminName"></p>
+          </div>
+
+          <!-- 이메일 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              이메일 <span class="text-red-500">*</span>
+            </label>
+            <input type="email" v-model="createForm.email" placeholder="이메일을 입력하세요"
+                   class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"
+                   :class="createErrors.email ? 'border-red-400 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'"/>
+            <p v-if="createErrors.email" class="mt-1 text-xs text-red-500" v-text="createErrors.email"></p>
+          </div>
+
+          <!-- 전화번호 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">전화번호</label>
+            <input type="text" v-model="createForm.phoneNumber" placeholder="010-0000-0000"
+                   class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all"/>
+          </div>
+
+          <!-- 권한 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">권한</label>
+            <select v-model="createForm.role"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-[#2a2b2c] text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400/40 transition-all">
+              <option value="ROLE_USER">일반 사용자</option>
+              <option value="ROLE_ADMIN">관리자</option>
+            </select>
+          </div>
+
+          <!-- 서버 에러 메시지 -->
+          <p v-if="createServerError" class="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg"
+             v-text="createServerError"></p>
+        </div>
+
+        <!-- 푸터 -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-[#161617]">
+          <button @click="closeCreateModal"
+                  :disabled="isCreating"
+                  class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors disabled:opacity-50">
+            취소
+          </button>
+          <button @click="createUser"
+                  :disabled="isCreating"
+                  class="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            <div v-if="isCreating" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span v-text="isCreating ? '추가 중...' : '계정 추가'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 사이드바 Vue 앱 -->
+  <script src="/js/sidebar.js"></script>
+
+  <script>
+    if (typeof CommonUI !== 'undefined') CommonUI.install();
+
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        // ── 목록 상태 ─────────────────────────────────────
+        /** 사용자 목록 */
+        const users       = ref([]);
+        /** 전체 건수 */
+        const totalCount  = ref(0);
+        /** 전체 페이지 수 */
+        const totalPages  = ref(0);
+        /** 현재 페이지 번호 (0부터) */
+        const currentPage = ref(0);
+        /** 목록 로딩 중 여부 */
+        const isLoading   = ref(false);
+
+        // ── 검색 조건 ─────────────────────────────────────
+        const searchKeyword = ref('');
+        const searchRole    = ref('');
+        const searchStatus  = ref('');
+
+        // ── 계정 추가 모달 상태 ────────────────────────────
+        const showCreateModal  = ref(false);
+        const isCreating       = ref(false);
+        const createServerError = ref('');
+        const createErrors     = ref({ adminId: '', password: '', adminName: '', email: '' });
+
+        const emptyCreateForm = () => ({
+          adminId:     '',
+          password:    '',
+          adminName:   '',
+          email:       '',
+          phoneNumber: '',
+          role:        'ROLE_USER',
+        });
+        const createForm = ref(emptyCreateForm());
+
+        // ── 수정 모달 상태 ────────────────────────────────
+        const showEditModal  = ref(false);
+        const isSubmitting   = ref(false);
+        const editServerError = ref('');
+        const editErrors     = ref({ adminName: '', email: '' });
+
+        /** 수정 폼 초기 구조 */
+        const emptyForm = () => ({
+          adminId:     '',
+          adminName:   '',
+          email:       '',
+          phoneNumber: '',
+          role:        'ROLE_USER',
+          useYn:       'Y',
+        });
+        const editForm = ref(emptyForm());
+
+        // ── 비밀번호 초기화 모달 상태 ─────────────────────
+        const showPasswordModal = ref(false);
+        const tempPassword      = ref('');
+        const passwordCopied    = ref(false);
+
+        // ── 페이지네이션 계산 ─────────────────────────────
+
+        /**
+         * 표시할 페이지 번호 범위를 계산합니다.
+         * 현재 페이지 주변 2개와 첫·마지막 페이지를 항상 표시하며, 생략 시 '...'을 삽입합니다.
+         *
+         * @returns {Array} 페이지 번호(1-based) 또는 '...' 문자열 배열
+         */
+        const paginationRange = computed(() => {
+          const total = totalPages.value;
+          const cur   = currentPage.value + 1; // 1-based 현재 페이지
+          if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+          const pages = new Set([1, total, cur - 1, cur, cur + 1].filter(p => p >= 1 && p <= total));
+          const sorted = [...pages].sort((a, b) => a - b);
+          const result = [];
+          let prev = 0;
+          for (const p of sorted) {
+            if (p - prev > 1) result.push('...');
+            result.push(p);
+            prev = p;
+          }
+          return result;
+        });
+
+        // ── API 호출 ──────────────────────────────────────
+
+        /**
+         * 현재 검색 조건과 페이지로 사용자 목록을 조회합니다.
+         *
+         * @param {number} [page=0] - 조회할 페이지 번호 (0-based)
+         */
+        async function loadUsers(page = 0) {
+          isLoading.value = true;
+          try {
+            const params = new URLSearchParams({ page, size: 10 });
+            if (searchKeyword.value) params.set('keyword', searchKeyword.value);
+            if (searchRole.value)    params.set('role',    searchRole.value);
+            if (searchStatus.value)  params.set('status',  searchStatus.value);
+
+            const { data } = await axios.get(`/api/admin/users?${params}`);
+            const result = data.result;
+            users.value       = result?.items      ?? [];
+            totalCount.value  = result?.totalCount ?? 0;
+            totalPages.value  = result?.totalPages ?? 0;
+            currentPage.value = result?.currentPage ?? 0;
+          } catch (e) {
+            console.error('[Admin] 사용자 목록 로드 실패:', e);
+            users.value = [];
+          } finally {
+            isLoading.value = false;
+          }
+        }
+
+        /** 검색 버튼 클릭: 첫 페이지부터 재조회 */
+        function handleSearch() {
+          loadUsers(0);
+        }
+
+        /** 필터 초기화 후 재조회 */
+        function resetSearch() {
+          searchKeyword.value = '';
+          searchRole.value    = '';
+          searchStatus.value  = '';
+          loadUsers(0);
+        }
+
+        /** 특정 페이지로 이동 */
+        function goToPage(page) {
+          if (page < 0 || page >= totalPages.value) return;
+          loadUsers(page);
+        }
+
+        // ── 수정 모달 ─────────────────────────────────────
+
+        /**
+         * 사용자 상세 조회 후 수정 모달을 엽니다.
+         *
+         * @param {string} adminId - 조회할 사용자 아이디
+         */
+        async function openEditModal(adminId) {
+          editForm.value      = emptyForm();
+          editErrors.value    = { adminName: '', email: '' };
+          editServerError.value = '';
+
+          try {
+            const { data } = await axios.get(`/api/admin/users/${adminId}`);
+            const u = data.result;
+            editForm.value = {
+              adminId:     u.adminId,
+              adminName:   u.adminName,
+              email:       u.email,
+              phoneNumber: u.phoneNumber ?? '',
+              role:        u.role,
+              useYn:       u.useYn,
+            };
+            showEditModal.value = true;
+            document.body.classList.add('modal-open');
+          } catch (e) {
+            alert('사용자 정보를 불러오는 중 오류가 발생했습니다.');
+            console.error('[Admin] 사용자 상세 조회 실패:', e);
+          }
+        }
+
+        /** 수정 모달 닫기 */
+        function closeEditModal() {
+          if (isSubmitting.value) return;
+          showEditModal.value = false;
+          document.body.classList.remove('modal-open');
+        }
+
+        /**
+         * 수정 폼 클라이언트 유효성 검사.
+         *
+         * @returns {boolean} 유효하면 true
+         */
+        function validateEditForm() {
+          editErrors.value = { adminName: '', email: '' };
+          let valid = true;
+
+          if (!editForm.value.adminName.trim()) {
+            editErrors.value.adminName = '이름을 입력해 주세요.';
+            valid = false;
+          }
+          if (!editForm.value.email.trim()) {
+            editErrors.value.email = '이메일을 입력해 주세요.';
+            valid = false;
+          } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.value.email)) {
+            editErrors.value.email = '올바른 이메일 형식이 아닙니다.';
+            valid = false;
+          }
+          return valid;
+        }
+
+        /** 수정 폼 저장 */
+        async function saveUser() {
+          if (!validateEditForm()) return;
+          editServerError.value = '';
+          isSubmitting.value    = true;
+
+          try {
+            await axios.post(`/api/admin/users/${editForm.value.adminId}/update`, {
+              adminName:   editForm.value.adminName,
+              email:       editForm.value.email,
+              phoneNumber: editForm.value.phoneNumber,
+              role:        editForm.value.role,
+              useYn:       editForm.value.useYn,
+            });
+            closeEditModal();
+            await loadUsers(currentPage.value);
+          } catch (e) {
+            editServerError.value = e.response?.data?.message ?? '저장 중 오류가 발생했습니다.';
+            console.error('[Admin] 사용자 수정 실패:', e);
+          } finally {
+            isSubmitting.value = false;
+          }
+        }
+
+        // ── 잠금 해제 ─────────────────────────────────────
+
+        /**
+         * 계정 잠금을 해제합니다.
+         *
+         * @param {string} adminId - 잠금 해제할 사용자 아이디
+         */
+        async function handleUnlock(adminId) {
+          const ok = (typeof CommonUI !== 'undefined')
+            ? await CommonUI.confirm('이 계정의 잠금을 해제하시겠습니까?', { confirmLabel: '해제' })
+            : confirm('이 계정의 잠금을 해제하시겠습니까?');
+          if (!ok) return;
+
+          try {
+            await axios.post(`/api/admin/users/${adminId}/unlock`);
+            await loadUsers(currentPage.value);
+          } catch (e) {
+            alert(e.response?.data?.message ?? '잠금 해제 중 오류가 발생했습니다.');
+            console.error('[Admin] 잠금 해제 실패:', e);
+          }
+        }
+
+        // ── 비밀번호 초기화 ───────────────────────────────
+
+        /**
+         * 비밀번호를 초기화하고 임시 비밀번호 모달을 표시합니다.
+         *
+         * @param {string} adminId - 비밀번호를 초기화할 사용자 아이디
+         */
+        async function handleResetPassword(adminId) {
+          const ok = (typeof CommonUI !== 'undefined')
+            ? await CommonUI.confirm('비밀번호를 초기화하시겠습니까?\n임시 비밀번호가 발급됩니다.', { type: 'warning', confirmLabel: '초기화' })
+            : confirm('비밀번호를 초기화하시겠습니까?');
+          if (!ok) return;
+
+          try {
+            const { data } = await axios.post(`/api/admin/users/${adminId}/reset-password`);
+            tempPassword.value      = data.result?.tempPassword ?? '';
+            passwordCopied.value    = false;
+            showPasswordModal.value = true;
+            document.body.classList.add('modal-open');
+          } catch (e) {
+            alert(e.response?.data?.message ?? '비밀번호 초기화 중 오류가 발생했습니다.');
+            console.error('[Admin] 비밀번호 초기화 실패:', e);
+          }
+        }
+
+        /** 임시 비밀번호를 클립보드에 복사합니다. */
+        async function copyPassword() {
+          try {
+            await navigator.clipboard.writeText(tempPassword.value);
+            passwordCopied.value = true;
+            setTimeout(() => { passwordCopied.value = false; }, 2500);
+          } catch (e) {
+            console.error('[Admin] 클립보드 복사 실패:', e);
+          }
+        }
+
+        // ── 계정 추가 모달 ─────────────────────────────────
+
+        /** 계정 추가 모달을 엽니다. */
+        function openCreateModal() {
+          createForm.value      = emptyCreateForm();
+          createErrors.value    = { adminId: '', password: '', adminName: '', email: '' };
+          createServerError.value = '';
+          showCreateModal.value = true;
+          document.body.classList.add('modal-open');
+        }
+
+        /** 계정 추가 모달을 닫습니다. */
+        function closeCreateModal() {
+          if (isCreating.value) return;
+          showCreateModal.value = false;
+          document.body.classList.remove('modal-open');
+        }
+
+        /**
+         * 계정 추가 폼 유효성 검사.
+         *
+         * @returns {boolean} 유효하면 true
+         */
+        function validateCreateForm() {
+          createErrors.value = { adminId: '', password: '', adminName: '', email: '' };
+          let valid = true;
+
+          if (!createForm.value.adminId.trim()) {
+            createErrors.value.adminId = '아이디를 입력해 주세요.';
+            valid = false;
+          }
+          if (!createForm.value.password || createForm.value.password.length < 8) {
+            createErrors.value.password = '비밀번호는 8자 이상이어야 합니다.';
+            valid = false;
+          }
+          if (!createForm.value.adminName.trim()) {
+            createErrors.value.adminName = '이름을 입력해 주세요.';
+            valid = false;
+          }
+          if (!createForm.value.email.trim()) {
+            createErrors.value.email = '이메일을 입력해 주세요.';
+            valid = false;
+          } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.value.email)) {
+            createErrors.value.email = '올바른 이메일 형식이 아닙니다.';
+            valid = false;
+          }
+          return valid;
+        }
+
+        /**
+         * 새 계정을 생성합니다.
+         */
+        async function createUser() {
+          if (!validateCreateForm()) return;
+          createServerError.value = '';
+          isCreating.value = true;
+
+          try {
+            await axios.post('/api/admin/users/create', {
+              adminId:     createForm.value.adminId,
+              password:    createForm.value.password,
+              adminName:   createForm.value.adminName,
+              email:       createForm.value.email,
+              phoneNumber: createForm.value.phoneNumber,
+              role:        createForm.value.role,
+            });
+            closeCreateModal();
+            await loadUsers(0);
+          } catch (e) {
+            createServerError.value = e.response?.data?.message ?? '계정 생성 중 오류가 발생했습니다.';
+            console.error('[Admin] 계정 생성 실패:', e);
+          } finally {
+            isCreating.value = false;
+          }
+        }
+
+        // ── 사용자 삭제 ───────────────────────────────────
+
+        /**
+         * 사용자를 논리 삭제합니다 (use_yn = 'N').
+         *
+         * @param {string} adminId - 삭제할 사용자 아이디
+         */
+        async function handleDelete(adminId) {
+          const ok = (typeof CommonUI !== 'undefined')
+            ? await CommonUI.confirm('정말로 이 사용자를 삭제하시겠습니까?\n삭제된 계정은 비활성화되며 로그인이 불가능합니다.', { type: 'danger', confirmLabel: '삭제' })
+            : confirm('정말로 이 사용자를 삭제하시겠습니까?');
+          if (!ok) return;
+
+          try {
+            await axios.post(`/api/admin/users/${adminId}/delete`);
+            await loadUsers(currentPage.value);
+          } catch (e) {
+            alert(e.response?.data?.message ?? '삭제 중 오류가 발생했습니다.');
+            console.error('[Admin] 사용자 삭제 실패:', e);
+          }
+        }
+
+        // ── 유틸리티 ──────────────────────────────────────
+
+        /**
+         * 상태 코드를 한글 레이블로 변환합니다.
+         *
+         * @param {string} status - 'active' | 'inactive' | 'locked'
+         * @returns {string} 한글 상태명
+         */
+        function statusLabel(status) {
+          return { active: '활성', inactive: '비활성', locked: '잠금' }[status] ?? status;
+        }
+
+        /**
+         * ISO 날짜 문자열을 'YYYY-MM-DD' 형식으로 포맷합니다.
+         *
+         * @param {string} dateStr - ISO 날짜 문자열
+         * @returns {string} 포맷된 날짜 또는 '-'
+         */
+        function formatDate(dateStr) {
+          if (!dateStr) return '-';
+          return new Date(dateStr).toLocaleDateString('ko-KR', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          }).replace(/\. /g, '-').replace('.', '');
+        }
+
+        // ── 비밀번호 모달 닫을 때 body class 제거 ─────────
+        // Vue watch 없이 버튼 클릭 핸들러에서 직접 처리
+
+        // ── 마운트 시 초기 로드 ───────────────────────────
+        onMounted(() => loadUsers(0));
+
+        return {
+          users, totalCount, totalPages, currentPage, isLoading,
+          searchKeyword, searchRole, searchStatus,
+          showCreateModal, isCreating, createServerError, createErrors, createForm,
+          showEditModal, isSubmitting, editServerError, editErrors, editForm,
+          showPasswordModal, tempPassword, passwordCopied,
+          paginationRange,
+          handleSearch, resetSearch, goToPage,
+          openCreateModal, closeCreateModal, createUser,
+          openEditModal, closeEditModal, saveUser,
+          handleUnlock, handleResetPassword, copyPassword, handleDelete,
+          statusLabel, formatDate,
+        };
+      }
+    }).mount('#adminApp');
+  </script>
+
+</body>
+</html>

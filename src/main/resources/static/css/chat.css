@@ -23,6 +23,13 @@ textarea::-webkit-scrollbar { display: none; }
 .ai-content strong { font-weight: 600; }
 .ai-content a { color: #3b82f6; text-decoration: underline; }
 
+/* ── 다크모드 AI 응답 스타일 ────────────────────────────── */
+.dark .ai-content code { background: #2d3748; color: #e2e8f0; }
+.dark .ai-content pre  { background: #1a202c; }
+.dark .ai-content a    { color: #60a5fa; }
+.dark .chat-messages::-webkit-scrollbar-thumb { background: #4b5563; }
+.dark .chat-history::-webkit-scrollbar-thumb  { background: #4b5563; }
+
 /* ── 사이드바 접힘 ───────────────────────────────────────── */
 #sidebar.collapsed { width: 0; overflow: hidden; }
 #sidebarToggleBtn { display: none; }
