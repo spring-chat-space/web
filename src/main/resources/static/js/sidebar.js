@@ -12,7 +12,7 @@
  * 수신 이벤트 (← 메인 Vue 앱):
  *   'chat:roomCreated'     → 신규 채팅방 생성 완료 (detail: { roomId })
  *
- * 의존성: Vue 3 전역 빌드(vue.global.prod.js), axios.min.js, common-ui.umd.js (선택)
+ * 의존성: vue.global.prod.js, axios.min.js, common-ui.umd.js
  * 로드 순서: vue.global.prod.js → axios.min.js → common-ui.umd.js → sidebar.js
  */
 (function () {

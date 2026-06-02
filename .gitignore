@@ -14,6 +14,3 @@ out/
 .vscode/
 *.iml
 .DS_Store
-
-# 5. npm
-node_modules/
