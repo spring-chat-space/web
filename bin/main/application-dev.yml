@@ -1,0 +1,5 @@
+server:
+  port: 8080
+
+was:
+  base-url: http://dev-was.example.com:8081

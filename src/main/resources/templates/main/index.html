@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Space</title>
+    <!-- 로컬 벤더 라이브러리 (CDN 대신 /vendor/ 경로 사용) -->
+    <script src="/vendor/tailwindcss.js"></script>
+    <link rel="stylesheet" href="/css/chat.css">
+    <script src="/vendor/vue.global.prod.js"></script>
+    <script src="/vendor/axios.min.js"></script>
+    <!-- 마크다운 렌더링 (AI 응답의 **bold**, 코드블록 등 처리) -->
+    <script src="/vendor/marked.min.js"></script>
+    <!-- 공통 UI 컴포넌트 (LoadingSpinner, ConfirmModal) - chat-vue 빌드 결과물 -->
+    <script src="/common-ui/common-ui.umd.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sidebar: "#f0f4f9",
+              "sidebar-hover": "#e2e8f4",
+              "sidebar-active": "#d3e3fd",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="h-screen flex overflow-hidden bg-white font-sans antialiased">
+
+    <!-- ====== 좌측 사이드바 (Fragment 분리 - sidebar.js가 인터랙션 담당) ====== -->
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+
+    <!-- 사이드바 접혔을 때 펼치기 버튼 (sidebar.js의 toggleSidebar 호출) -->
+    <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
+            class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 text-gray-500 transition-all">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+      </svg>
+    </button>
+
+    <!-- ====== Vue 3 앱 마운트 영역 (우측 메인 콘텐츠만 담당) ====== -->
+    <main id="chatApp" class="flex-1 flex flex-col h-full overflow-hidden bg-white">
+
+      <!-- 채팅 메시지 출력 영역 -->
+      <div ref="chatMessagesRef" class="flex-1 overflow-y-auto chat-messages">
+
+        <!-- 빈 상태 (채팅 없을 때 환영 화면) -->
+        <div v-show="showEmpty" class="h-full flex flex-col items-center justify-center text-center px-6">
+          <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/30">
+            <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-semibold text-gray-800 mb-2">
+            안녕하세요,
+            <!-- Thymeleaf가 서버 측에서 사전 렌더링 후 Vue가 마운트되므로 충돌 없음 -->
+            <span class="text-blue-600"
+                  th:text="${user != null ? user.adminName : '관리자'}">관리자</span>님!
+          </h2>
+          <p class="text-gray-500 text-base max-w-sm leading-relaxed">
+            무엇이든 도와드릴게요. 아래 입력창에 메시지를 입력해 대화를 시작해보세요.
+          </p>
+
+          <!-- 빠른 시작 카드 -->
+          <div class="grid grid-cols-2 gap-3 mt-8 max-w-lg w-full">
+            <button @click="quickStart('코드 리뷰를 도와주세요')"
+                    class="text-left p-4 rounded-2xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-200 group">
+              <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700">💻 코드 리뷰</p>
+              <p class="text-xs text-gray-400 mt-0.5">코드 품질 개선 도움</p>
+            </button>
+            <button @click="quickStart('문서 작성을 도와주세요')"
+                    class="text-left p-4 rounded-2xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-200 group">
+              <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700">📝 문서 작성</p>
+              <p class="text-xs text-gray-400 mt-0.5">기술 문서 및 정리</p>
+            </button>
+            <button @click="quickStart('번역을 도와주세요')"
+                    class="text-left p-4 rounded-2xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-200 group">
+              <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700">🌐 번역</p>
+              <p class="text-xs text-gray-400 mt-0.5">다국어 번역 지원</p>
+            </button>
+            <button @click="quickStart('아이디어 브레인스토밍을 도와주세요')"
+                    class="text-left p-4 rounded-2xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-200 group">
+              <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700">💡 브레인스토밍</p>
+              <p class="text-xs text-gray-400 mt-0.5">아이디어 발굴 및 탐색</p>
+            </button>
+          </div>
+        </div>
+
+        <!-- 채팅 메시지 목록 -->
+        <div v-show="!showEmpty" class="max-w-3xl mx-auto w-full px-6 py-6 space-y-6">
+
+          <!-- v-for로 메시지 렌더링 -->
+          <div v-for="msg in messages" :key="msg.id">
+            <!-- 사용자 메시지 (v-text로 XSS 방지) -->
+            <div v-if="msg.senderType === 'USER'" class="flex justify-end">
+              <div class="max-w-[70%] bg-blue-600 text-white px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm whitespace-pre-wrap"
+                   v-text="msg.content"></div>
+            </div>
+            <!-- AI 메시지 (v-html로 마크다운 렌더링) -->
+            <div v-else class="flex justify-start gap-3">
+              <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+              </div>
+              <div class="max-w-[75%] bg-gray-100 text-gray-800 px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed shadow-sm">
+                <div class="ai-content" v-html="renderMarkdown(msg.content)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI 응답 대기 로딩 버블 -->
+          <div v-if="isLoading" class="flex justify-start gap-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <div class="bg-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+              <div class="flex gap-1 items-center h-5">
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+                <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 하단 입력창 -->
+      <div class="px-6 pb-6 pt-4 border-t border-gray-100">
+        <div class="max-w-3xl mx-auto">
+          <div class="relative bg-gray-50 border border-gray-200 rounded-2xl shadow-sm hover:border-gray-300 focus-within:border-blue-400 focus-within:shadow-md focus-within:shadow-blue-100/50 transition-all duration-200">
+            <textarea v-model="inputText" ref="textareaRef" rows="1"
+                      placeholder="메시지를 입력하세요..."
+                      @keydown="handleKeydown"
+                      @input="autoResize"
+                      :disabled="isWaiting"
+                      class="w-full bg-transparent px-5 py-4 pr-14 text-sm text-gray-800 placeholder-gray-400 focus:outline-none rounded-2xl max-h-40 overflow-y-auto"></textarea>
+
+            <!-- 전송 버튼 -->
+            <button @click="sendMessage" :disabled="isWaiting"
+                    class="absolute right-3 bottom-3 w-9 h-9 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-200 shadow-sm shadow-blue-600/30 hover:shadow-blue-600/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg v-show="!isWaiting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+              <div v-show="isWaiting" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </button>
+          </div>
+          <p class="text-center text-xs text-gray-400 mt-2">
+            Chat Space는 실수를 할 수 있으므로 중요한 정보는 직접 확인하세요.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 사이드바 Vue 앱: body 최하단에서 로드해야 #sidebar DOM이 존재함 -->
+    <script src="/js/sidebar.js"></script>
+
+    <script>
+      // 공통 UI 컴포넌트 초기화 (LoadingSpinner, ConfirmModal DOM에 마운트)
+      if (typeof CommonUI !== 'undefined') CommonUI.install();
+
+      const { createApp, ref, nextTick, onMounted } = Vue;
+
+      createApp({
+      	setup() {
+          // ── 반응형 상태 ────────────────────────────────────
+          const currentRoomId   = ref(null);  // 현재 열린 채팅방 ID
+          const isWaiting       = ref(false); // AI 응답 대기 중 여부
+          const isLoading       = ref(false); // AI 로딩 버블 표시 여부
+          const showEmpty       = ref(true);  // 빈 상태 화면 표시 여부
+          const messages        = ref([]);    // 메시지 목록 [{ id, senderType, content }]
+          const inputText       = ref('');    // textarea v-model 대상
+
+          // ── 템플릿 DOM 참조 ────────────────────────────────
+          const chatMessagesRef = ref(null); // 스크롤 컨테이너
+          const textareaRef     = ref(null); // 입력 textarea
+
+          // ── 마크다운 렌더링 ────────────────────────────────
+          const renderMarkdown = (content) => marked.parse(content);
+
+          // ── 스크롤 하단 이동 ───────────────────────────────
+          const scrollToBottom = async () => {
+            await nextTick();
+            if (chatMessagesRef.value) {
+              chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
+            }
+          };
+
+          // ── 채팅방 초기화 (새 채팅) ────────────────────────
+          const resetChat = () => {
+            currentRoomId.value = null;
+            messages.value      = [];
+            showEmpty.value     = true;
+            inputText.value     = '';
+            if (textareaRef.value) textareaRef.value.style.height = 'auto';
+          };
+
+          // ── 채팅방 메시지 로드 ─────────────────────────────
+          const loadRoom = async (roomId) => {
+            currentRoomId.value = roomId;
+            try {
+              const { data } = await axios.get(`/api/chat/rooms/${roomId}/messages`);
+              messages.value = (data.result ?? []).map(m => ({ ...m, id: `hist-${m.messageId}` }));
+              showEmpty.value = false;
+            } catch (e) {
+              console.error('메시지 로드 실패:', e);
+              messages.value  = [];
+              showEmpty.value = false;
+            }
+            await scrollToBottom();
+            if (textareaRef.value) textareaRef.value.focus();
+          };
+
+          // ── 빠른 시작 카드 클릭 ───────────────────────────
+          const quickStart = async (text) => {
+            inputText.value = text;
+            await nextTick();
+            autoResize();
+            if (textareaRef.value) textareaRef.value.focus();
+          };
+
+          // ── 키보드 핸들러 ─────────────────────────────────
+          const handleKeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          };
+
+          // ── textarea 높이 자동 조절 ───────────────────────
+          const autoResize = () => {
+            const el = textareaRef.value;
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+          };
+
+          // ── 메시지 전송 ───────────────────────────────────
+          const sendMessage = async () => {
+            if (isWaiting.value) return;
+            const text = inputText.value.trim();
+            if (!text) return;
+
+            showEmpty.value = false;
+            messages.value.push({ id: `user-${Date.now()}`, senderType: 'USER', content: text });
+            inputText.value = '';
+
+            await nextTick();
+            if (textareaRef.value) textareaRef.value.style.height = 'auto';
+
+            isWaiting.value = true;
+            isLoading.value = true;
+            await scrollToBottom();
+
+            try {
+              const { data } = await axios.post('/api/chat/send', {
+                roomId: currentRoomId.value,
+                content: text
+              });
+
+              isLoading.value = false;
+              messages.value.push({ id: `ai-${Date.now()}`, senderType: 'AI', content: data.result.aiContent });
+
+              // 신규 채팅방 생성 시 사이드바에 CustomEvent로 알림
+              if (data.result.roomTitle) {
+                currentRoomId.value = data.result.roomId;
+                window.dispatchEvent(new CustomEvent('chat:roomCreated', { detail: { roomId: data.result.roomId } }));
+              } else if (!currentRoomId.value) {
+                currentRoomId.value = data.result.roomId;
+              }
+
+            } catch (e) {
+              isLoading.value = false;
+              messages.value.push({ id: `err-${Date.now()}`, senderType: 'AI', content: '죄송합니다. 응답 생성 중 오류가 발생했습니다.' });
+              console.error('메시지 전송 오류:', e);
+            } finally {
+              isWaiting.value = false;
+              await scrollToBottom();
+            }
+          };
+
+          // ── sidebar.js 이벤트 수신 ────────────────────────
+          // sidebar.js가 CustomEvent를 발행하면 Vue 앱이 수신하여 상태를 변경합니다.
+          window.addEventListener('sidebar:roomSelected', (e) => loadRoom(e.detail.roomId));
+          window.addEventListener('sidebar:newChat',      ()  => resetChat());
+          window.addEventListener('sidebar:roomDeleted',  (e) => {
+            // 삭제된 방이 현재 보고 있는 방이면 새 채팅으로 초기화
+            if (currentRoomId.value === e.detail.roomId) resetChat();
+          });
+
+          return {
+            showEmpty,
+            messages,
+            inputText,
+            isWaiting,
+            isLoading,
+            chatMessagesRef,
+            textareaRef,
+            renderMarkdown,
+            sendMessage,
+            handleKeydown,
+            autoResize,
+            quickStart,
+          };
+        }
+      }).mount('#chatApp');
+    </script>
+  </body>
+</html>

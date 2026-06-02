@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: chat-web
+  profiles:
+    active: local
+  thymeleaf:
+    cache: false
