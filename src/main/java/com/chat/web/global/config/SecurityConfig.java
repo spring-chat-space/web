@@ -59,7 +59,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/vendor/**", "/css/**", "/js/**", "/common-ui/**", "/login", "/signup", "/public/**").permitAll()
                 // 관리자 전용 페이지 및 API는 ADMIN 권한 필요
-                .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin/**", "/api/admin/**", "/ocr/**", "/api/ocr/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

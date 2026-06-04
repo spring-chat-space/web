@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * WEB 레이어 전역 예외 처리기.
@@ -14,6 +15,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * 정적 리소스 미존재(404) 처리.
+     * axios.min.js.map 등 소스맵 파일 요청처럼 브라우저가 자동으로 보내는
+     * 부가 요청이 GlobalExceptionHandler에 도달해 ERROR 로그를 남기는 것을 방지한다.
+     *
+     * @param e 정적 리소스 없음 예외
+     * @return 404 Not Found (body 없음)
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Void> handleNoResourceFound(NoResourceFoundException e) {
+        log.debug("정적 리소스 없음 (무시): {}", e.getMessage());
+        return ResponseEntity.notFound().build();
+    }
 
     /**
      * 서비스 레이어에서 전파된 RuntimeException 처리.

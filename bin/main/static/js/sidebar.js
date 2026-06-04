@@ -87,19 +87,29 @@
 
       /**
        * 채팅방을 선택합니다. 사이드바 하이라이트 갱신 후 메인 앱에 이벤트를 발행합니다.
+       * 메인 채팅 앱(#chatApp)이 없는 페이지(예: 관리자 페이지)에서는 해당 방으로 이동합니다.
        *
        * @param {number} roomId - 선택할 채팅방 ID
        */
       function openRoom(roomId) {
+        if (!document.getElementById('chatApp')) {
+          window.location.href = `/?roomId=${roomId}`;
+          return;
+        }
         currentRoomId.value = roomId;
         window.dispatchEvent(new CustomEvent('sidebar:roomSelected', { detail: { roomId } }));
       }
 
       /**
        * 새 채팅을 시작합니다. 활성 채팅방을 해제하고 메인 앱에 이벤트를 발행합니다.
+       * 메인 채팅 앱(#chatApp)이 없는 페이지에서는 홈으로 이동합니다.
        */
       function newChat() {
         currentRoomId.value = null;
+        if (!document.getElementById('chatApp')) {
+          window.location.href = '/';
+          return;
+        }
         window.dispatchEvent(new CustomEvent('sidebar:newChat'));
       }
 
@@ -183,6 +193,11 @@
       window.addEventListener('chat:roomCreated', (e) => {
         currentRoomId.value = e.detail.roomId;
         loadRooms();
+      });
+
+      // URL ?roomId=X로 다른 페이지에서 이동해 온 경우 사이드바 활성 방을 갱신합니다.
+      window.addEventListener('chat:roomActivated', (e) => {
+        currentRoomId.value = e.detail.roomId;
       });
 
       // ── 마운트 시 초기화 ───────────────────────────────

@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>영수증 OCR - Chat Space</title>
+  <link rel="stylesheet" href="/common-ui/chat-vue.css">
+  <link rel="stylesheet" href="/css/chat.css">
+  <link rel="stylesheet" href="/css/receipt.css">
+  <script src="/vendor/vue.global.prod.js"></script>
+  <script src="/vendor/axios.min.js"></script>
+  <script src="/common-ui/common-ui.umd.js"></script>
+</head>
+<body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
+
+  <!-- 사이드바 프래그먼트 -->
+  <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+
+  <!-- 사이드바 접혔을 때 펼치기 버튼 -->
+  <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
+          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+    </svg>
+  </button>
+
+  <!-- ====== Vue 앱 영역 (영수증 OCR 메인 콘텐츠) ====== -->
+  <main id="ocrApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
+
+    <!-- 페이지 헤더 -->
+    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">영수증 OCR</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">영수증 이미지를 업로드하면 결제 정보를 자동으로 추출합니다.</p>
+        </div>
+        <!-- 결과 초기화 버튼 -->
+        <button v-if="result || previewUrl"
+                @click="resetAll"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-[#2a2b2c] transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          초기화
+        </button>
+      </div>
+    </div>
+
+    <!-- 콘텐츠 영역 (좌: 드래그존 / 우: 결과 카드) -->
+    <div class="flex-1 overflow-hidden flex flex-col lg:flex-row">
+
+      <!-- ── 왼쪽 패널: 드래그 존 (40%) ── -->
+      <div class="w-full lg:w-2/5 flex flex-col border-r border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
+
+        <!-- 드래그존: 가용 높이를 모두 채움 -->
+        <div class="flex-1 p-5 flex flex-col min-h-0">
+
+          <!-- 이미지 없는 상태 -->
+          <div v-if="!previewUrl"
+               class="upload-zone flex-1 flex flex-col items-center justify-center gap-4 cursor-pointer"
+               :class="{ 'drag-over': isDragging }"
+               @click="triggerFileInput"
+               @dragover.prevent="isDragging = true"
+               @dragleave.prevent="isDragging = false"
+               @drop.prevent="handleDrop">
+
+            <div class="w-14 h-14 bg-orange-50 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center">
+              <svg class="w-7 h-7 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+            </div>
+
+            <div class="text-center">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-200">영수증 이미지를 드래그하거나<br>클릭하여 업로드</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">JPG · PNG · WEBP · 최대 10MB</p>
+            </div>
+
+            <input ref="fileInput"
+                   type="file"
+                   accept="image/jpeg,image/png,image/webp,image/gif"
+                   class="hidden"
+                   @change="handleFileChange" />
+          </div>
+
+          <!-- 이미지 미리보기 상태 -->
+          <div v-else class="flex-1 flex flex-col gap-3 min-h-0">
+            <div class="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#1e1f20] flex-1 min-h-0"
+                 @mousemove="handleMagnifierMove"
+                 @mouseleave="magnifier.visible = false">
+              <img ref="previewImgRef"
+                   :src="previewUrl"
+                   alt="영수증 미리보기"
+                   class="w-full h-full object-contain cursor-zoom-in"
+                   @click="imageModalOpen = true"
+                   @load="magnifier.visible = false" />
+              <!-- 호버 시 확대 힌트 -->
+              <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                <div class="bg-black/40 rounded-full p-2">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/>
+                  </svg>
+                </div>
+              </div>
+              <!-- 제거 버튼 -->
+              <button @click.stop="clearImage"
+                      class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <!-- 파일명 -->
+            <p class="text-xs text-center text-gray-400 dark:text-gray-500 truncate px-1" v-text="fileName"></p>
+          </div>
+        </div>
+
+        <!-- 하단: API 에러 + 분석 버튼 -->
+        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-700/50 space-y-2.5">
+          <div v-if="apiError"
+               class="flex items-start gap-2.5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs">
+            <svg class="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-red-600 dark:text-red-400" v-text="apiError"></p>
+          </div>
+          <button @click="analyzeReceipt"
+                  :disabled="!selectedFile || isLoading"
+                  class="w-full py-2.5 rounded-xl font-medium text-sm transition-all"
+                  :class="selectedFile && !isLoading
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+            <span v-if="isLoading" class="flex items-center justify-center gap-2">
+              <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              분석 중...
+            </span>
+            <span v-else>영수증 분석하기</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── 오른쪽 패널: 결과 카드 (60%) ── -->
+      <div class="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-[#0f1011]">
+
+        <!-- 빈 상태 -->
+        <div v-if="!result && !isLoading" class="h-full flex items-center justify-center">
+          <div class="text-center">
+            <div class="w-14 h-14 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm">
+              <svg class="w-7 h-7 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">분석 결과가 여기에 표시됩니다</p>
+            <p class="text-xs text-gray-400 dark:text-gray-600 mt-1">영수증 이미지를 업로드하고 분석 버튼을 클릭하세요</p>
+          </div>
+        </div>
+
+        <!-- 로딩 -->
+        <div v-if="isLoading && !result" class="h-full flex items-center justify-center">
+          <div class="text-center">
+            <svg class="w-9 h-9 spin text-orange-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">영수증을 분석하고 있습니다...</p>
+          </div>
+        </div>
+
+        <!-- 결과 카드 목록 -->
+        <div v-if="result && !isLoading" class="space-y-4 result-card max-w-xl">
+
+          <!-- 판독 불가 카드 -->
+          <div v-if="!result.is_receipt"
+               class="bg-white dark:bg-[#1e1f20] border border-amber-200 dark:border-amber-800/60 rounded-2xl p-5 flex items-start gap-3">
+            <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div>
+              <p class="text-sm font-semibold text-amber-700 dark:text-amber-400">영수증을 인식할 수 없습니다</p>
+              <p class="text-xs text-amber-600 dark:text-amber-500 mt-1" v-text="result.error_message || '올바른 영수증 사진이 아닙니다. 다시 시도해 주세요.'"></p>
+            </div>
+          </div>
+
+          <template v-else>
+
+            <!-- 헤더: 분석완료 뱃지 + JSON 복사 -->
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 rounded-full">분석 완료</span>
+              <button @click="copyJson"
+                      class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+                      :class="copied
+                        ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-300 dark:border-green-700'
+                        : 'bg-white dark:bg-[#1e1f20] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#2a2b2c]'">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        v-if="!copied"
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        v-else d="M5 13l4 4L19 7"/>
+                </svg>
+                <span v-text="copied ? '복사됨!' : 'JSON 복사'"></span>
+              </button>
+            </div>
+
+            <!-- 가맹점 정보 카드 (수정 가능한 폼) -->
+            <div class="bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden">
+              <div class="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-gray-700/70">
+                <div class="w-5 h-5 bg-blue-100 dark:bg-blue-900/40 rounded-md flex items-center justify-center">
+                  <svg class="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                  </svg>
+                </div>
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">가맹점 정보</span>
+              </div>
+              <div class="px-5 py-4 space-y-3">
+                <!-- 상호명 -->
+                <div class="flex items-center gap-3">
+                  <label class="w-24 text-xs font-medium text-gray-400 dark:text-gray-500 shrink-0">상호명</label>
+                  <input v-model="editData.merchant.name"
+                         type="text"
+                         class="ocr-input flex-1"
+                         placeholder="상호명" />
+                </div>
+                <!-- 사업자번호 -->
+                <div class="flex items-center gap-3">
+                  <label class="w-24 text-xs font-medium text-gray-400 dark:text-gray-500 shrink-0">사업자번호</label>
+                  <input v-model="editData.merchant.biz_number"
+                         type="text"
+                         class="ocr-input flex-1 font-mono"
+                         placeholder="사업자번호" />
+                </div>
+                <!-- 주소 -->
+                <div class="flex items-center gap-3">
+                  <label class="w-24 text-xs font-medium text-gray-400 dark:text-gray-500 shrink-0">주소</label>
+                  <input v-model="editData.merchant.address"
+                         type="text"
+                         class="ocr-input flex-1"
+                         placeholder="주소" />
+                </div>
+                <!-- 전화번호 -->
+                <div class="flex items-center gap-3">
+                  <label class="w-24 text-xs font-medium text-gray-400 dark:text-gray-500 shrink-0">전화번호</label>
+                  <input v-model="editData.merchant.tel"
+                         type="text"
+                         class="ocr-input flex-1"
+                         placeholder="전화번호" />
+                </div>
+                <!-- 거래 일시 -->
+                <div class="flex items-center gap-3">
+                  <label class="w-24 text-xs font-medium text-gray-400 dark:text-gray-500 shrink-0">거래 일시</label>
+                  <input v-model="editData.transaction_date"
+                         type="text"
+                         class="ocr-input flex-1"
+                         placeholder="거래 일시" />
+                </div>
+              </div>
+            </div>
+
+            <!-- 결제 정보 카드 (수정 가능한 테이블) -->
+            <div v-if="editData.payments && editData.payments.length > 0"
+                 class="bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden">
+              <div class="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-gray-700/70">
+                <div class="w-5 h-5 bg-green-100 dark:bg-green-900/40 rounded-md flex items-center justify-center">
+                  <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                  </svg>
+                </div>
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">결제 정보</span>
+                <span v-if="editData.payments.length > 1"
+                      class="ml-auto px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-full">
+                  {{ editData.payments.length }}건
+                </span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th class="ocr-th">카드사</th>
+                      <th class="ocr-th">승인번호</th>
+                      <th class="ocr-th">할부</th>
+                      <th class="ocr-th text-right">금액</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(pay, idx) in editData.payments" :key="idx"
+                        class="border-t border-gray-100 dark:border-gray-700/50">
+                      <td class="ocr-td">
+                        <input v-model="pay.card_issuer"
+                               type="text"
+                               class="ocr-input w-full"
+                               placeholder="카드사" />
+                      </td>
+                      <td class="ocr-td">
+                        <input v-model="pay.approval_number"
+                               type="text"
+                               class="ocr-input w-full font-mono"
+                               placeholder="승인번호" />
+                      </td>
+                      <td class="ocr-td">
+                        <input v-model.number="pay.installment"
+                               type="number"
+                               class="ocr-input w-20 text-center"
+                               placeholder="0" />
+                      </td>
+                      <td class="ocr-td text-right">
+                        <input v-model.number="pay.amount"
+                               type="number"
+                               class="ocr-input w-full text-right"
+                               placeholder="0" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 총 결제 금액 카드 (수정 가능한 입력) -->
+            <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl px-5 py-4 shadow-sm flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                </svg>
+                <span class="text-sm font-medium text-orange-100">총 결제 금액</span>
+              </div>
+              <input v-model.number="editData.total_amount"
+                     type="number"
+                     class="bg-transparent text-white font-bold text-xl w-32 text-right outline-none border-b border-orange-300/50 focus:border-white focus:shadow-none placeholder-orange-200/50"
+                     placeholder="0" />
+            </div>
+
+            <!-- 저장하기 버튼 -->
+            <div class="flex gap-3">
+              <button @click="saveData"
+                      :disabled="isSaving"
+                      class="flex-1 py-2.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2"
+                      :class="isSaving
+                        ? 'bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed'
+                        : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'">
+                <span v-if="isSaving" class="flex items-center gap-2">
+                  <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  저장 중...
+                </span>
+                <span v-else>저장하기</span>
+              </button>
+            </div>
+
+          </template>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 토스트 알림 (에러 또는 성공) -->
+    <transition name="toast">
+      <div v-if="toast.msg"
+           class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
+           :class="toast.type === 'success'
+             ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
+             : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
+        <svg v-if="toast.type === 'error'"
+             class="w-4 h-4 text-red-400 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <svg v-else
+             class="w-4 h-4 text-green-300 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span v-text="toast.msg"></span>
+      </div>
+    </transition>
+
+    <!-- 이미지 확대 모달 -->
+    <transition name="modal-fade">
+      <div v-if="imageModalOpen"
+           class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+           @click.self="imageModalOpen = false">
+        <div class="relative max-w-2xl w-full mx-6">
+          <button @click="imageModalOpen = false"
+                  class="absolute -top-3 -right-3 w-7 h-7 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors z-10">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+          <img :src="previewUrl" alt="영수증 확대"
+               class="w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
+          <p class="text-center text-xs text-white/40 mt-2 truncate" v-text="fileName"></p>
+        </div>
+      </div>
+    </transition>
+
+    <!-- 돋보기 렌즈 (고정 위치, 마우스 따라다니기) -->
+    <div v-if="magnifier.visible"
+         class="magnifier"
+         :style="{
+           left: magnifier.x + 'px',
+           top: magnifier.y + 'px',
+           backgroundImage: `url(${previewUrl})`,
+           backgroundSize: magnifier.bgW + 'px ' + magnifier.bgH + 'px',
+           backgroundPosition: magnifier.bgX + 'px ' + magnifier.bgY + 'px'
+         }">
+    </div>
+
+  </main>
+
+  <script>
+    const { createApp, ref, watch } = Vue;
+
+    createApp({
+      setup() {
+        const fileInput       = ref(null);
+        const selectedFile    = ref(null);
+        const previewUrl      = ref('');
+        const fileName        = ref('');
+        const isDragging      = ref(false);
+        const isLoading       = ref(false);
+        const result          = ref(null);
+        const apiError        = ref('');
+        const copied          = ref(false);
+        const toast           = ref({ msg: '', type: 'error' });
+        const imageModalOpen  = ref(false);
+        const previewImgRef   = ref(null);
+        const isSaving        = ref(false);
+        const editData        = ref({
+          merchant: { name: '', biz_number: '', address: '', tel: '' },
+          transaction_date: '',
+          payments: [],
+          total_amount: 0
+        });
+        const magnifier       = ref({
+          visible: false,
+          x: 0,
+          y: 0,
+          bgX: 0,
+          bgY: 0,
+          bgW: 0,
+          bgH: 0
+        });
+
+        // 상수
+        const ZOOM = 2.5;
+        const LENS_SIZE = 120;
+        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        let toastTimer = null;
+
+        /**
+         * 토스트 메시지를 표시한다.
+         * 3초 후 자동으로 사라진다.
+         *
+         * @param {string} msg 표시할 메시지
+         * @param {string} type 토스트 타입 ('success' 또는 'error')
+         */
+        function showToast(msg, type = 'error') {
+          toast.value = { msg, type };
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => {
+            toast.value = { msg: '', type: 'error' };
+          }, 3000);
+        }
+
+        /** 숨겨진 파일 input 클릭 트리거 */
+        function triggerFileInput() {
+          fileInput.value?.click();
+        }
+
+        /** input[type=file] change 핸들러 */
+        function handleFileChange(event) {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          if (!ALLOWED_TYPES.includes(file.type)) {
+            showToast('이미지 파일만 업로드할 수 있습니다. (JPG, PNG, WEBP)', 'error');
+            event.target.value = '';
+            return;
+          }
+          selectFile(file);
+        }
+
+        /** 드래그앤드롭 drop 핸들러 */
+        function handleDrop(event) {
+          isDragging.value = false;
+          const file = event.dataTransfer?.files?.[0];
+          if (!file) return;
+          if (!ALLOWED_TYPES.includes(file.type)) {
+            showToast('이미지 파일만 업로드할 수 있습니다. (JPG, PNG, WEBP)', 'error');
+            return;
+          }
+          selectFile(file);
+        }
+
+        /** 파일 선택 공통 처리: 미리보기 URL 생성 */
+        function selectFile(file) {
+          selectedFile.value = file;
+          fileName.value = file.name;
+          previewUrl.value = URL.createObjectURL(file);
+          result.value = null;
+          apiError.value = '';
+        }
+
+        /** 이미지 제거 */
+        function clearImage() {
+          selectedFile.value = null;
+          previewUrl.value   = '';
+          fileName.value     = '';
+          result.value       = null;
+          apiError.value     = '';
+          editData.value     = {
+            merchant: { name: '', biz_number: '', address: '', tel: '' },
+            transaction_date: '',
+            payments: [],
+            total_amount: 0
+          };
+          magnifier.value.visible = false;
+          if (fileInput.value) fileInput.value.value = '';
+        }
+
+        /** 전체 초기화 */
+        function resetAll() {
+          clearImage();
+        }
+
+        /**
+         * object-contain 여백을 보정하여 돋보기 위치를 계산한다.
+         *
+         * @param {MouseEvent} event 마우스 이벤트
+         */
+        function handleMagnifierMove(event) {
+          if (!previewImgRef.value || !previewUrl.value) return;
+
+          const img = previewImgRef.value;
+          const rect = img.parentElement.getBoundingClientRect();
+          const naturalWidth = img.naturalWidth;
+          const naturalHeight = img.naturalHeight;
+
+          // 현재 표시되는 이미지 크기 (object-contain 후)
+          const displayedWidth = img.offsetWidth;
+          const displayedHeight = img.offsetHeight;
+
+          // 렌더링된 이미지의 실제 크기 비율
+          const scale = Math.min(displayedWidth / naturalWidth, displayedHeight / naturalHeight);
+          const scaledImgWidth = naturalWidth * scale;
+          const scaledImgHeight = naturalHeight * scale;
+
+          // 여백 (레터박스)
+          const offsetX = (displayedWidth - scaledImgWidth) / 2;
+          const offsetY = (displayedHeight - scaledImgHeight) / 2;
+
+          // 마우스 위치 (컨테이너 기준)
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          // 마우스가 실제 이미지 영역 내에 있는지 확인
+          if (mouseX < offsetX || mouseX > offsetX + scaledImgWidth ||
+              mouseY < offsetY || mouseY > offsetY + scaledImgHeight) {
+            magnifier.value.visible = false;
+            return;
+          }
+
+          magnifier.value.visible = true;
+
+          // 렌즈 위치 (화면 고정)
+          magnifier.value.x = event.clientX - LENS_SIZE / 2;
+          magnifier.value.y = event.clientY - LENS_SIZE / 2;
+
+          // 이미지 좌표 (마우스 위치 기준, 여백 제거)
+          const imgX = mouseX - offsetX;
+          const imgY = mouseY - offsetY;
+
+          // 렌즈 배경 위치 (확대된 이미지가 렌즈 중심에 오도록)
+          magnifier.value.bgW = displayedWidth * ZOOM;
+          magnifier.value.bgH = displayedHeight * ZOOM;
+          magnifier.value.bgX = -(imgX * ZOOM - LENS_SIZE / 2);
+          magnifier.value.bgY = -(imgY * ZOOM - LENS_SIZE / 2);
+        }
+
+        /**
+         * OCR 분석 API 호출.
+         * multipart/form-data로 이미지를 전송하고 결과를 result에 저장한다.
+         */
+        async function analyzeReceipt() {
+          if (!selectedFile.value || isLoading.value) return;
+          isLoading.value = true;
+          result.value    = null;
+          apiError.value  = '';
+
+          try {
+            const formData = new FormData();
+            formData.append('image', selectedFile.value);
+
+            const response = await axios.post('/api/ocr/receipt', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (response.data?.success) {
+              result.value = response.data.result;
+            } else {
+              apiError.value = response.data?.message || '분석에 실패했습니다.';
+            }
+          } catch (err) {
+            console.error('OCR 분석 오류:', err);
+            apiError.value = err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.';
+          } finally {
+            isLoading.value = false;
+          }
+        }
+
+        /**
+         * result가 변경될 때 editData를 초기화한다.
+         * 분석 완료 후 수정 가능한 폼 데이터를 설정한다.
+         */
+        watch(result, (newResult) => {
+          if (newResult && newResult.is_receipt) {
+            editData.value = {
+              merchant: {
+                name: newResult.merchant?.name || '',
+                biz_number: newResult.merchant?.biz_number || '',
+                address: newResult.merchant?.address || '',
+                tel: newResult.merchant?.tel || ''
+              },
+              transaction_date: newResult.transaction_date || '',
+              payments: (newResult.payments || []).map(p => ({
+                card_issuer: p.card_issuer || '',
+                approval_number: p.approval_number || '',
+                installment: p.installment || 0,
+                amount: p.amount || 0
+              })),
+              total_amount: newResult.total_amount || 0
+            };
+          }
+        });
+
+        /**
+         * 수정된 데이터를 서버에 저장한다.
+         * POST /api/ocr/receipt/save로 editData를 전송한다.
+         */
+        async function saveData() {
+          if (isSaving.value || !editData.value) return;
+          isSaving.value = true;
+
+          try {
+            const response = await axios.post('/api/ocr/receipt/save', editData.value);
+
+            if (response.data?.success) {
+              showToast('저장되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '저장에 실패했습니다.', 'error');
+            }
+          } catch (err) {
+            console.error('데이터 저장 오류:', err);
+            const errorMsg = err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.';
+            showToast(errorMsg, 'error');
+          } finally {
+            isSaving.value = false;
+          }
+        }
+
+        /**
+         * 금액을 한국 원화 형식으로 포맷한다.
+         *
+         * @param {number|null} amount 금액
+         * @returns {string} 포맷된 금액 문자열 (예: ₩15,000)
+         */
+        function formatAmount(amount) {
+          if (amount == null) return '-';
+          return '₩' + amount.toLocaleString('ko-KR');
+        }
+
+        /**
+         * 분석 결과(editData)를 JSON 문자열로 클립보드에 복사한다.
+         * 복사 후 2초간 "복사됨!" 상태를 표시한다.
+         */
+        async function copyJson() {
+          if (!editData.value) return;
+          try {
+            const jsonStr = JSON.stringify(editData.value, null, 2);
+            await navigator.clipboard.writeText(jsonStr);
+            copied.value = true;
+            setTimeout(() => {
+              copied.value = false;
+            }, 2000);
+          } catch (err) {
+            console.error('클립보드 복사 실패:', err);
+          }
+        }
+
+        return {
+          fileInput, selectedFile, previewUrl, fileName,
+          isDragging, isLoading, result, apiError, copied,
+          toast, imageModalOpen, previewImgRef, isSaving,
+          editData, magnifier,
+          triggerFileInput, handleFileChange, handleDrop,
+          clearImage, resetAll, analyzeReceipt, formatAmount, copyJson,
+          handleMagnifierMove, saveData, showToast
+        };
+      }
+    }).mount('#ocrApp');
+  </script>
+
+</body>
+</html>

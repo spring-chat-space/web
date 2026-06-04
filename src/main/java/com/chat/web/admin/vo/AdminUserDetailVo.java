@@ -2,6 +2,7 @@ package com.chat.web.admin.vo;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
  * WAS API 응답 result를 역직렬화하는 객체.
  */
 @Getter
+@Setter
 @NoArgsConstructor
 public class AdminUserDetailVo {
 

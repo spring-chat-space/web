@@ -34,6 +34,9 @@ textarea::-webkit-scrollbar { display: none; }
 #sidebar.collapsed { width: 0; overflow: hidden; }
 #sidebarToggleBtn { display: none; }
 #sidebar.collapsed ~ #sidebarToggleBtn { display: flex; }
+/* 사이드바 접힐 때 절대위치 토글 버튼(12px + 32px = 44px)과 콘텐츠 겹침 방지 */
+main { transition: padding-left 0.3s ease; }
+#sidebar.collapsed ~ main { padding-left: 24px; }
 
 /* ── 채팅방 목록 아이템: X 버튼 호버 시에만 표시 ───────── */
 .room-item .room-delete-btn { display: none; }

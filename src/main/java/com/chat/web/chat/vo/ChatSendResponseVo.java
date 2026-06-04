@@ -2,12 +2,14 @@ package com.chat.web.chat.vo;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 메시지 전송 응답 VO (WEB 레이어).
  * WAS의 ChatSendResponseVo와 동일한 구조로 RestClient JSON 역직렬화에 사용된다.
  */
 @Getter
+@Setter
 @NoArgsConstructor
 public class ChatSendResponseVo {
 

@@ -124,13 +124,17 @@ public class AuthController {
     /**
      * 회원가입 폼 처리.
      * WAS 회원가입 API 호출 후 성공 시 로그인 페이지로 리다이렉트한다.
+     * 실패 시 redirect 대신 뷰를 직접 반환하여 입력값을 유지한다.
+     * (@ModelAttribute 파라미터는 자동으로 Model에 바인딩되므로 폼 입력값이 그대로 유지됨)
      *
-     * @param signupRequestVo    회원가입 폼 데이터
-     * @param redirectAttributes 리다이렉트 시 전달할 메시지
-     * @return 성공 시 로그인 페이지로 리다이렉트, 실패 시 회원가입 페이지 재표시
+     * @param signupRequestVo    회원가입 폼 데이터 (자동으로 model에 "signupRequestVo"로 등록)
+     * @param model              에러 메시지 전달용 모델
+     * @param redirectAttributes 성공 시 리다이렉트 메시지 전달용
+     * @return 성공 시 로그인 페이지로 리다이렉트, 실패 시 회원가입 뷰 직접 반환
      */
     @PostMapping("/signup")
     public String signupProcess(@ModelAttribute SignupRequestVo signupRequestVo,
+                                Model model,
                                 RedirectAttributes redirectAttributes) {
         try {
             authService.signup(signupRequestVo);
@@ -140,8 +144,9 @@ public class AuthController {
 
         } catch (RuntimeException e) {
             log.error("회원가입 실패: {}", e.getMessage());
-            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-            return "redirect:/signup";
+            // redirect 대신 뷰 직접 반환: 입력값이 model에 남아 폼에 재표시됨
+            model.addAttribute("errorMessage", e.getMessage());
+            return "auth/signup";
         }
     }
 }

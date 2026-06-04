@@ -2,12 +2,14 @@ package com.chat.web.auth.vo;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 로그인 성공 응답 데이터 전송 객체 (WEB 레이어).
  * WAS의 LoginResponseVo와 동일한 구조로, RestClient JSON 역직렬화에 사용된다.
  */
 @Getter
+@Setter
 @NoArgsConstructor
 public class LoginResponseVo {
 

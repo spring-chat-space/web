@@ -2,6 +2,7 @@ package com.chat.web.admin.vo;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -10,6 +11,7 @@ import java.util.List;
  * WAS API 응답 result를 역직렬화하는 객체.
  */
 @Getter
+@Setter
 @NoArgsConstructor
 public class AdminUserListResponseVo {
 

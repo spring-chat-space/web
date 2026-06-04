@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>회원가입 - Chat Space</title>
-    <script src="/vendor/tailwindcss.js"></script>
+    <link rel="stylesheet" href="/common-ui/chat-vue.css">
   </head>
   <body class="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-md">
@@ -35,56 +35,67 @@
           <span th:text="${errorMessage}"></span>
         </div>
 
-        <!-- JS 클라이언트 사이드 유효성 에러 -->
-        <div id="jsError" class="hidden mb-5 flex items-center gap-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 text-sm">
-          <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clip-rule="evenodd"/>
-          </svg>
-          <span id="jsErrorMsg"></span>
-        </div>
-
         <!-- 회원가입 폼 -->
         <form th:action="@{/signup}" th:object="${signupRequestVo}" method="post"
               onsubmit="return validateForm()" class="space-y-4">
 
+          <!-- 아이디 -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1.5">아이디</label>
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">
+              아이디 <span class="text-red-400">*</span>
+            </label>
             <input id="adminId" type="text" th:field="*{adminId}"
                    placeholder="사용할 아이디를 입력하세요"
+                   oninput="clearFieldError('adminId')"
                    class="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"/>
+            <p id="err-adminId" class="hidden mt-1 text-xs text-red-400"></p>
           </div>
 
+          <!-- 비밀번호 -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1.5">비밀번호</label>
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">
+              비밀번호 <span class="text-red-400">*</span>
+            </label>
             <input id="password" type="password" th:field="*{password}"
-                   placeholder="비밀번호를 입력하세요"
+                   placeholder="8자 이상 입력하세요"
+                   oninput="clearFieldError('password')"
                    class="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"/>
+            <p id="err-password" class="hidden mt-1 text-xs text-red-400"></p>
           </div>
 
+          <!-- 이름 -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1.5">이름</label>
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">
+              이름 <span class="text-red-400">*</span>
+            </label>
             <input id="adminName" type="text" th:field="*{adminName}"
                    placeholder="이름을 입력하세요"
+                   oninput="clearFieldError('adminName')"
                    class="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"/>
+            <p id="err-adminName" class="hidden mt-1 text-xs text-red-400"></p>
           </div>
 
+          <!-- 이메일 -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1.5">이메일</label>
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">
+              이메일 <span class="text-red-400">*</span>
+            </label>
             <input id="email" type="email" th:field="*{email}"
                    placeholder="이메일 주소를 입력하세요"
+                   oninput="clearFieldError('email')"
                    class="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"/>
+            <p id="err-email" class="hidden mt-1 text-xs text-red-400"></p>
           </div>
 
+          <!-- 전화번호 -->
           <div>
             <label class="block text-sm font-medium text-gray-300 mb-1.5">전화번호</label>
             <input id="phoneNumber" type="tel" th:field="*{phoneNumber}"
                    placeholder="010-1234-5678"
-                   oninput="formatPhoneNumber(this)"
+                   oninput="formatPhoneNumber(this); clearFieldError('phoneNumber')"
                    maxlength="13"
                    class="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"/>
-            <p class="text-xs text-gray-500 mt-1">입력 시 하이픈(-)이 자동으로 추가됩니다</p>
+            <p id="err-phoneNumber" class="hidden mt-1 text-xs text-red-400"></p>
           </div>
 
           <div class="pt-1">
@@ -106,73 +117,127 @@
     </div>
 
     <script>
+      /** 유효성 검사 대상 필드 목록 */
+      const FIELD_IDS = ['adminId', 'password', 'adminName', 'email', 'phoneNumber'];
+
       /**
-       * 전화번호 자동 하이픈 포맷 (010-1234-5678 형식).
-       * 숫자만 추출 후 패턴에 맞게 재포맷한다.
+       * 전화번호 자동 하이픈 포맷 (010-XXXX-XXXX 형식).
+       * 숫자만 추출 후 최대 11자리로 잘라 패턴에 맞게 재포맷한다.
        *
        * @param {HTMLInputElement} input - 전화번호 입력 필드
        */
       function formatPhoneNumber(input) {
-        // 숫자만 추출
-        const digits = input.value.replace(/\D/g, '');
-
-        // 패턴별 하이픈 삽입
-        if (digits.length <= 3) {
+        const digits = input.value.replace(/\D/g, '').slice(0, 11);
+        if (digits.length < 4) {
           input.value = digits;
-        } else if (digits.length <= 7) {
-          // 010-XXXX
+        } else if (digits.length < 8) {
           input.value = digits.slice(0, 3) + '-' + digits.slice(3);
         } else {
-          // 010-XXXX-XXXX
-          input.value = digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7, 11);
+          input.value = digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
+        }
+      }
+
+      /**
+       * 특정 필드의 에러 표시를 초기화한다.
+       * 사용자가 입력을 시작하면 해당 필드의 빨간 테두리와 에러 메시지를 지운다.
+       *
+       * @param {string} fieldId - 초기화할 필드 id
+       */
+      function clearFieldError(fieldId) {
+        const input = document.getElementById(fieldId);
+        input.classList.remove('border-red-500/70');
+        input.classList.add('border-white/10');
+        const errEl = document.getElementById('err-' + fieldId);
+        if (errEl) {
+          errEl.textContent = '';
+          errEl.classList.add('hidden');
+        }
+      }
+
+      /**
+       * 특정 필드에 에러를 표시한다.
+       * 빨간 테두리를 추가하고 필드 하단에 에러 메시지를 노출한다.
+       *
+       * @param {string} fieldId - 에러를 표시할 필드 id
+       * @param {string} msg - 표시할 에러 메시지
+       */
+      function setFieldError(fieldId, msg) {
+        const input = document.getElementById(fieldId);
+        input.classList.add('border-red-500/70');
+        input.classList.remove('border-white/10');
+        const errEl = document.getElementById('err-' + fieldId);
+        if (errEl) {
+          errEl.textContent = msg;
+          errEl.classList.remove('hidden');
         }
       }
 
       /**
        * 폼 제출 전 클라이언트 사이드 유효성 검사.
-       * 빈 필드 체크와 전화번호 형식 검증을 수행한다.
+       * 모든 필드를 한 번에 검사하여 각 필드에 인라인 에러를 표시한다.
+       * 유효성 실패 시 폼 제출을 막아 입력값을 유지한다.
        *
-       * @returns {boolean} 검증 통과 시 true, 실패 시 false
+       * @returns {boolean} 모든 필드가 유효하면 true
        */
       function validateForm() {
-        const fields = [
-          { id: 'adminId',     label: '아이디' },
-          { id: 'password',    label: '비밀번호' },
-          { id: 'adminName',   label: '이름' },
-          { id: 'email',       label: '이메일' },
-          { id: 'phoneNumber', label: '전화번호' },
-        ];
+        // 이전 에러 초기화
+        FIELD_IDS.forEach(clearFieldError);
 
-        // 빈 필드 검사
-        for (const field of fields) {
-          const val = document.getElementById(field.id).value.trim();
-          if (!val) {
-            showJsError(`${field.label}을(를) 입력해주세요.`);
-            document.getElementById(field.id).focus();
-            return false;
-          }
+        let valid = true;
+        let firstInvalidId = null;
+
+        // 아이디 (필수)
+        if (!document.getElementById('adminId').value.trim()) {
+          setFieldError('adminId', '아이디를 입력해 주세요.');
+          firstInvalidId = firstInvalidId ?? 'adminId';
+          valid = false;
         }
 
-        // 전화번호 형식 검사 (01X-XXXX-XXXX)
+        // 비밀번호 (필수, 8자 이상)
+        const pw = document.getElementById('password').value;
+        if (!pw) {
+          setFieldError('password', '비밀번호를 입력해 주세요.');
+          firstInvalidId = firstInvalidId ?? 'password';
+          valid = false;
+        } else if (pw.length < 8) {
+          setFieldError('password', '비밀번호는 8자 이상이어야 합니다.');
+          firstInvalidId = firstInvalidId ?? 'password';
+          valid = false;
+        }
+
+        // 이름 (필수)
+        if (!document.getElementById('adminName').value.trim()) {
+          setFieldError('adminName', '이름을 입력해 주세요.');
+          firstInvalidId = firstInvalidId ?? 'adminName';
+          valid = false;
+        }
+
+        // 이메일 (필수, 형식 검사)
+        const email = document.getElementById('email').value.trim();
+        if (!email) {
+          setFieldError('email', '이메일을 입력해 주세요.');
+          firstInvalidId = firstInvalidId ?? 'email';
+          valid = false;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          setFieldError('email', '올바른 이메일 형식이 아닙니다.');
+          firstInvalidId = firstInvalidId ?? 'email';
+          valid = false;
+        }
+
+        // 전화번호 (선택, 입력 시 형식 검사)
         const phone = document.getElementById('phoneNumber').value;
-        const phoneRegex = /^01([0|1|6|7|8|9])-([0-9]{3,4})-([0-9]{4})$/;
-        if (!phoneRegex.test(phone)) {
-          showJsError('올바른 휴대폰 번호 형식이 아닙니다. (예: 010-1234-5678)');
-          document.getElementById('phoneNumber').focus();
-          return false;
+        if (phone && !/^01([016789])-([0-9]{3,4})-([0-9]{4})$/.test(phone)) {
+          setFieldError('phoneNumber', '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)');
+          firstInvalidId = firstInvalidId ?? 'phoneNumber';
+          valid = false;
         }
 
-        return true;
-      }
+        // 첫 번째 오류 필드로 포커스 이동
+        if (firstInvalidId) {
+          document.getElementById(firstInvalidId).focus();
+        }
 
-      /**
-       * JS 에러 메시지 표시.
-       *
-       * @param {string} msg - 표시할 에러 메시지
-       */
-      function showJsError(msg) {
-        document.getElementById('jsErrorMsg').textContent = msg;
-        document.getElementById('jsError').classList.remove('hidden');
+        return valid;
       }
     </script>
   </body>
