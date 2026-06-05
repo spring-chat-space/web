@@ -1,8 +1,11 @@
 package com.chat.web.guide.vo;
 
+import com.chat.web.common.file.vo.FileVo;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,6 +26,7 @@ public class GuideDetailVo {
     private String isPublic;
     private Integer likeCount;
     private boolean myLiked;
+    @JsonProperty("isMine")
     private boolean isMine;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

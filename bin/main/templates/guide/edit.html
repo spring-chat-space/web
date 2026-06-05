@@ -6,12 +6,14 @@
   <title>가이드 수정 - Chat Space</title>
   <link rel="stylesheet" href="/common-ui/chat-vue.css">
   <link rel="stylesheet" href="/css/chat.css">
-  <!-- EasyMDE 에디터 CDN -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+  <!-- EasyMDE 에디터 (plugins/easymde) -->
+  <link rel="stylesheet" href="/plugins/easymde/easymde.min.css">
+  <!-- Font Awesome (EasyMDE 툴바 아이콘용, plugins/fontawesome) -->
+  <link rel="stylesheet" href="/plugins/fontawesome/css/all.min.css">
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/vendor/axios.min.js"></script>
   <script src="/common-ui/common-ui.umd.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+  <script src="/plugins/easymde/easymde.min.js"></script>
 </head>
 <body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
 
@@ -203,10 +205,11 @@
             </button>
             <button type="submit"
                     :disabled="isSubmitting"
-                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
                     :class="isSubmitting
                       ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                      : 'bg-blue-500 hover:bg-blue-600'">
+                      : 'bg-blue-600 hover:bg-blue-700'"
+                    disabled:opacity-50 disabled:cursor-not-allowed>
               <span v-if="isSubmitting" class="flex items-center gap-2">
                 <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -223,29 +226,9 @@
     </div>
   </main>
 
-  <!-- 토스트 알림 (에러 또는 성공) -->
-  <transition name="toast">
-    <div v-if="toast.msg"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
-         :class="toast.type === 'success'
-           ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
-           : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
-      <svg v-if="toast.type === 'error'"
-           class="w-4 h-4 text-red-400 flex-shrink-0"
-           fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-      </svg>
-      <svg v-else
-           class="w-4 h-4 text-green-300 flex-shrink-0"
-           fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-      </svg>
-      <span v-text="toast.msg"></span>
-    </div>
-  </transition>
-
   <script>
+    if (typeof CommonUI !== 'undefined') CommonUI.install();
+
     const { createApp, ref, onMounted } = Vue;
 
     // Thymeleaf 변수
@@ -261,27 +244,8 @@
         const isSubmitting = ref(false);
         const isDraggingFiles = ref(false);
         const isDeletingFile = ref(false);
-        const toast = ref({ msg: '', type: 'error' });
-
         const form = ref(null);
         let editor = null;
-
-        let toastTimer = null;
-
-        /**
-         * 토스트 메시지를 표시한다.
-         * 3초 후 자동으로 사라진다.
-         *
-         * @param {string} msg 표시할 메시지
-         * @param {string} type 토스트 타입 ('success' 또는 'error')
-         */
-        function showToast(msg, type = 'error') {
-          toast.value = { msg, type };
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => {
-            toast.value = { msg: '', type: 'error' };
-          }, 3000);
-        }
 
         /**
          * 페이지 로드 시 기존 가이드 데이터를 조회한다.
@@ -404,7 +368,7 @@
 
         /**
          * 기존 파일을 삭제한다.
-         * POST /api/guide/file/{fileSeq}/delete
+         * POST /api/file/{fileSeq}/delete
          *
          * @param {number} fileSeq 파일 ID
          */
@@ -412,18 +376,18 @@
           if (!confirm('이 파일을 삭제하시겠습니까?')) return;
           try {
             isDeletingFile.value = true;
-            const response = await axios.post(`/api/guide/file/${fileSeq}/delete`);
+            const response = await axios.post(`/api/file/${fileSeq}/delete`);
             if (response.data?.success) {
               if (form.value) {
                 form.value.existingFiles = form.value.existingFiles.filter(f => f.fileSeq !== fileSeq);
               }
-              showToast('파일이 삭제되었습니다.', 'success');
+              CommonUI.toast('파일이 삭제되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '삭제 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('파일 삭제 오류:', err);
-            showToast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isDeletingFile.value = false;
           }
@@ -431,7 +395,7 @@
 
         /**
          * 새 파일을 서버에 업로드한다.
-         * POST /api/guide/file/upload
+         * POST /api/file/upload
          *
          * @returns {Promise<number>} 업로드된 fileGroupSeq
          */
@@ -447,7 +411,7 @@
               formData.append('files', file);
             });
 
-            const response = await axios.post('/api/guide/file/upload', formData, {
+            const response = await axios.post('/api/file/upload', formData, {
               headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -469,7 +433,7 @@
          */
         async function submitForm() {
           if (!form.value || !form.value.title.trim() || !form.value.content.trim()) {
-            showToast('제목과 본문을 모두 입력하세요.');
+            CommonUI.toast('제목과 본문을 모두 입력하세요.', { type: 'error' });
             return;
           }
 
@@ -480,7 +444,7 @@
             let fileGroupSeq = form.value.fileGroupSeq;
             if (form.value.newFiles && form.value.newFiles.length > 0) {
               fileGroupSeq = await uploadNewFiles();
-              showToast('파일이 업로드되었습니다.', 'success');
+              CommonUI.toast('파일이 업로드되었습니다.', { type: 'success' });
             }
 
             // 가이드 수정 요청
@@ -492,16 +456,16 @@
             });
 
             if (response.data?.success) {
-              showToast('가이드가 저장되었습니다.', 'success');
+              CommonUI.toast('가이드가 저장되었습니다.', { type: 'success' });
               setTimeout(() => {
                 window.location.href = `/guide/${guideSeq}`;
               }, 500);
             } else {
-              showToast(response.data?.message || '저장 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '저장 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('가이드 수정 오류:', err);
-            showToast(err.response?.data?.message || '저장 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '저장 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isSubmitting.value = false;
           }
@@ -528,7 +492,7 @@
 
         return {
           editorRef, fileInputRef, isLoading, error, isSubmitting,
-          isDraggingFiles, isDeletingFile, toast, form,
+          isDraggingFiles, isDeletingFile, form,
           triggerFileInput, handleFileChange, handleFileDrop,
           removeNewFile, deleteExistingFile, submitForm, formatFileSize
         };

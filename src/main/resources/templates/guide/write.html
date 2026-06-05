@@ -6,13 +6,14 @@
   <title>새 가이드 작성 - Chat Space</title>
   <link rel="stylesheet" href="/common-ui/chat-vue.css">
   <link rel="stylesheet" href="/css/chat.css">
-  <!-- EasyMDE 에디터 CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+  <!-- EasyMDE 에디터 (plugins/easymde) -->
+  <link rel="stylesheet" href="/plugins/easymde/easymde.min.css">
+  <!-- Font Awesome (EasyMDE 툴바 아이콘용, plugins/fontawesome) -->
+  <link rel="stylesheet" href="/plugins/fontawesome/css/all.min.css">
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/vendor/axios.min.js"></script>
   <script src="/common-ui/common-ui.umd.js"></script>
-  <!-- EasyMDE 에디터 JS -->
-  <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+  <script src="/plugins/easymde/easymde.min.js"></script>
 </head>
 <body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
 
@@ -45,10 +46,11 @@
           </a>
           <button @click="saveGuide"
                   :disabled="isSaving || !formData.title.trim()"
-                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all"
+                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
                   :class="!isSaving && formData.title.trim()
-                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
-                    : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                    disabled:opacity-50 disabled:cursor-not-allowed">
             <span v-if="isSaving" class="flex items-center gap-2">
               <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -76,7 +78,7 @@
                  type="text"
                  placeholder="가이드 제목을 입력하세요"
                  maxlength="200"
-                 class="w-full px-4 py-3 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" />
+                 class="w-full px-4 py-3 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-colors" />
           <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
             {{ formData.title.length }} / 200자
           </p>
@@ -90,15 +92,15 @@
               <input v-model="formData.isPublic"
                      type="radio"
                      value="Y"
-                     class="w-4 h-4 text-green-500 focus:ring-green-500" />
-              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">공개</span>
+                     class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">공개</span>
             </label>
             <label class="flex items-center gap-3 cursor-pointer group">
               <input v-model="formData.isPublic"
                      type="radio"
                      value="N"
-                     class="w-4 h-4 text-green-500 focus:ring-green-500" />
-              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">비공개</span>
+                     class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">비공개</span>
             </label>
           </div>
         </div>
@@ -110,7 +112,7 @@
           <!-- 드래그 앤 드롭 영역 -->
           <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer transition-all"
                :class="isDraggingFile
-                 ? 'bg-green-50 dark:bg-green-900/10 border-green-400 dark:border-green-700'
+                 ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-400 dark:border-blue-700'
                  : 'hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-[#1a1b1c]'"
                @click="triggerFileInput"
                @dragover.prevent="isDraggingFile = true"
@@ -171,31 +173,11 @@
       </div>
     </div>
 
-    <!-- 토스트 알림 -->
-    <transition name="toast">
-      <div v-if="toast.msg"
-           class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
-           :class="toast.type === 'success'
-             ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
-             : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
-        <svg v-if="toast.type === 'error'"
-             class="w-4 h-4 text-red-400 flex-shrink-0"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <svg v-else
-             class="w-4 h-4 text-green-300 flex-shrink-0"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
-        <span v-text="toast.msg"></span>
-      </div>
-    </transition>
-
   </main>
 
   <script>
+    if (typeof CommonUI !== 'undefined') CommonUI.install();
+
     const { createApp, ref, onMounted } = Vue;
 
     createApp({
@@ -205,9 +187,7 @@
         const selectedFiles    = ref([]);
         const isDraggingFile   = ref(false);
         const isSaving         = ref(false);
-        const toast            = ref({ msg: '', type: 'error' });
         let editor             = null;
-        let toastTimer         = null;
 
         const formData = ref({
           title: '',
@@ -220,21 +200,6 @@
         const MAX_FILE_COUNT = 5;
         const MAX_FILE_SIZE = 10 * 1024 * 1024;  // 10MB
         const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
-
-        /**
-         * 토스트 메시지를 표시한다.
-         * 3초 후 자동으로 사라진다.
-         *
-         * @param {string} msg 표시할 메시지
-         * @param {string} type 토스트 타입 ('success' 또는 'error')
-         */
-        function showToast(msg, type = 'error') {
-          toast.value = { msg, type };
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => {
-            toast.value = { msg: '', type: 'error' };
-          }, 3000);
-        }
 
         /**
          * 파일 크기를 인간이 읽을 수 있는 형식으로 변환한다.
@@ -292,20 +257,20 @@
           for (const file of files) {
             // 파일 개수 초과 확인
             if (selectedFiles.value.length + validFiles.length >= MAX_FILE_COUNT) {
-              showToast(`최대 ${MAX_FILE_COUNT}개의 파일만 업로드할 수 있습니다.`, 'error');
+              CommonUI.toast(`최대 ${MAX_FILE_COUNT}개의 파일만 업로드할 수 있습니다.`, { type: 'error' });
               break;
             }
 
             // 파일 크기 확인
             if (file.size > MAX_FILE_SIZE) {
-              showToast(`${file.name}의 크기가 10MB를 초과합니다.`, 'error');
+              CommonUI.toast(`${file.name}의 크기가 10MB를 초과합니다.`, { type: 'error' });
               continue;
             }
 
             // 파일 확장자 확인
             const ext = file.name.split('.').pop()?.toLowerCase();
             if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
-              showToast(`${file.name}은 지원되지 않는 파일 형식입니다.`, 'error');
+              CommonUI.toast(`${file.name}은 지원되지 않는 파일 형식입니다.`, { type: 'error' });
               continue;
             }
 
@@ -316,7 +281,7 @@
           const totalSize = selectedFiles.value.reduce((sum, f) => sum + f.size, 0) +
                            validFiles.reduce((sum, f) => sum + f.size, 0);
           if (totalSize > MAX_TOTAL_SIZE) {
-            showToast('전체 파일 크기가 50MB를 초과합니다.', 'error');
+            CommonUI.toast('전체 파일 크기가 50MB를 초과합니다.', { type: 'error' });
             return;
           }
 
@@ -334,19 +299,19 @@
 
         /**
          * 가이드를 저장한다.
-         * 1. 파일이 있으면: POST /api/guide/file/upload
+         * 1. 파일이 있으면: POST /api/file/upload
          * 2. 가이드 등록: POST /api/guide/create
          * 3. 성공 시: /guide/{guideSeq}로 이동
          */
         async function saveGuide() {
           // 유효성 검사
           if (!formData.value.title.trim()) {
-            showToast('제목을 입력하세요.', 'error');
+            CommonUI.toast('제목을 입력하세요.', { type: 'error' });
             return;
           }
 
           if (!editor || !editor.value()) {
-            showToast('내용을 입력하세요.', 'error');
+            CommonUI.toast('내용을 입력하세요.', { type: 'error' });
             return;
           }
 
@@ -362,14 +327,14 @@
                 formDataForUpload.append('files', file);
               });
 
-              const uploadResponse = await axios.post('/api/guide/file/upload', formDataForUpload, {
+              const uploadResponse = await axios.post('/api/file/upload', formDataForUpload, {
                 headers: { 'Content-Type': 'multipart/form-data' }
               });
 
               if (uploadResponse.data?.success) {
                 fileGroupSeq = uploadResponse.data.result?.fileGroupSeq ?? null;
               } else {
-                showToast(uploadResponse.data?.message || '파일 업로드에 실패했습니다.', 'error');
+                CommonUI.toast(uploadResponse.data?.message || '파일 업로드에 실패했습니다.', { type: 'error' });
                 return;
               }
             }
@@ -385,17 +350,17 @@
             const guideResponse = await axios.post('/api/guide/create', guidePayload);
 
             if (guideResponse.data?.success && guideResponse.data.result) {
-              showToast('가이드가 저장되었습니다.', 'success');
+              CommonUI.toast('가이드가 저장되었습니다.', { type: 'success' });
               // 단계 3: 상세 페이지로 이동 (2초 후)
               setTimeout(() => {
                 window.location.href = `/guide/${guideResponse.data.result}`;
               }, 500);
             } else {
-              showToast(guideResponse.data?.message || '가이드 등록에 실패했습니다.', 'error');
+              CommonUI.toast(guideResponse.data?.message || '가이드 등록에 실패했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('가이드 저장 오류:', err);
-            showToast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', 'error');
+            CommonUI.toast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isSaving.value = false;
           }
@@ -463,14 +428,12 @@
           isDraggingFile,
           isSaving,
           formData,
-          toast,
           triggerFileInput,
           handleFilesChange,
           handleFilesDrop,
           removeFile,
           saveGuide,
           formatFileSize,
-          showToast
         };
       }
     }).mount('#guideWriteApp');

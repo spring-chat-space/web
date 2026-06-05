@@ -4,23 +4,17 @@ import com.chat.web.auth.vo.AdminUserSessionVo;
 import com.chat.web.global.common.ApiResponse;
 import com.chat.web.global.common.SessionConstants;
 import com.chat.web.global.common.WasApiResponse;
-import com.chat.web.guide.service.CommentService;
-import com.chat.web.guide.service.FileService;
+import com.chat.web.common.comment.service.CommentService;
+import com.chat.web.common.comment.vo.CommentListResponseVo;
 import com.chat.web.guide.service.GuideService;
 import com.chat.web.guide.vo.*;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +24,7 @@ import java.util.Map;
  * 프론트엔드 JavaScript 요청을 받아 WAS 백엔드 API를 호출하고,
  * 세션에서 adminId를 추출하여 요청에 포함시킨다.
  * 모든 응답은 ApiResponse 래퍼로 반환된다.
+ * 참고: 파일 관련 기능은 FileApiController로 분리됨.
  */
 @Slf4j
 @RestController
@@ -38,7 +33,6 @@ import java.util.Map;
 public class GuideApiController {
 
     private final GuideService guideService;
-    private final FileService fileService;
     private final CommentService commentService;
     private final RestClient wasRestClient;
 
@@ -170,72 +164,6 @@ public class GuideApiController {
             @PathVariable("guideSeq") Long guideSeq, HttpSession session) {
         String adminId = getAdminId(session);
         return ResponseEntity.ok(ApiResponse.success(guideService.toggleLike(guideSeq, adminId)));
-    }
-
-    /**
-     * 파일 업로드.
-     * POST /api/guide/file/upload (multipart/form-data)
-     *
-     * @param groupType 파일 그룹 타입 (GUIDE 등)
-     * @param files     업로드할 파일 목록
-     * @param session   HttpSession 객체
-     * @return ApiResponse<FileUploadResponseVo>
-     */
-    @PostMapping("/file/upload")
-    public ResponseEntity<ApiResponse<FileUploadResponseVo>> uploadFiles(
-            @RequestParam("groupType") String groupType,
-            @RequestParam("files") List<MultipartFile> files,
-            HttpSession session) {
-        getAdminId(session);
-        return ResponseEntity.ok(ApiResponse.success(fileService.upload(groupType, files)));
-    }
-
-    /**
-     * 파일 삭제.
-     * POST /api/guide/file/{fileSeq}/delete
-     *
-     * @param fileSeq 삭제할 파일 시퀀스
-     * @param session HttpSession 객체
-     * @return ApiResponse<Void>
-     */
-    @PostMapping("/file/{fileSeq}/delete")
-    public ResponseEntity<ApiResponse<Void>> deleteFile(
-            @PathVariable("fileSeq") Long fileSeq, HttpSession session) {
-        getAdminId(session);
-        fileService.deleteFile(fileSeq);
-        return ResponseEntity.ok(ApiResponse.success());
-    }
-
-    /**
-     * 파일 다운로드.
-     * GET /api/guide/file/{fileSeq}/download
-     * WAS에서 직접 InputStream 스트림으로 받아 클라이언트에 전달한다.
-     *
-     * @param fileSeq 다운로드할 파일 시퀀스
-     * @param session HttpSession 객체
-     * @return InputStreamResource (파일 바이너리 스트림)
-     * @throws RuntimeException 파일을 찾을 수 없는 경우
-     */
-    @GetMapping("/file/{fileSeq}/download")
-    public ResponseEntity<InputStreamResource> downloadFile(
-            @PathVariable("fileSeq") Long fileSeq, HttpSession session) {
-        getAdminId(session);
-
-        // WAS에서 파일 바이너리 스트림을 직접 받아온다
-        InputStream is = wasRestClient.get()
-                .uri("/api/v1/file/{fileSeq}/download", fileSeq)
-                .retrieve()
-                .body(InputStream.class);
-
-        if (is == null) {
-            throw new RuntimeException("파일을 찾을 수 없습니다.");
-        }
-
-        // 파일 첨부 응답으로 반환 (다운로드 트리거)
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(new InputStreamResource(is));
     }
 
     /**

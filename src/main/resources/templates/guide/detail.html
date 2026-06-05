@@ -9,8 +9,7 @@
   <script src="/vendor/vue.global.prod.js"></script>
   <script src="/vendor/axios.min.js"></script>
   <script src="/common-ui/common-ui.umd.js"></script>
-  <!-- marked.js CDN for 마크다운 렌더링 -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/vendor/marked.min.js"></script>
 </head>
 <body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
 
@@ -19,7 +18,7 @@
 
   <!-- 사이드바 접혔을 때 펼치기 버튼 -->
   <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
-          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all">
+          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-white/20 dark:border-white/10 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all duration-220">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
     </svg>
@@ -28,18 +27,62 @@
   <!-- ====== Vue 앱 영역 (가이드 상세) ====== -->
   <main id="guideDetailApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
 
-    <!-- 페이지 헤더 -->
-    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">가이드</h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">커뮤니티 가이드 문서를 확인하세요.</p>
-        </div>
+    <!-- 페이지 헤더 (Breadcrumb + 액션 버튼) -->
+    <div v-if="guide" class="px-6 py-4 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314] flex items-center justify-between">
+      <!-- 좌측: 뒤로가기 + 가이드 -->
+      <div class="flex items-center gap-3">
+        <a href="/guide"
+           class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-220 hover:-translate-x-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          <span>가이드 목록</span>
+        </a>
+      </div>
+
+      <!-- 우측: 액션 버튼들 (좋아요, 수정, 삭제) -->
+      <div class="flex items-center gap-2">
+        <!-- 좋아요 버튼 -->
+        <button @click="toggleLike"
+                :disabled="isLiking"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                :class="guide.myLiked
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200/50 dark:border-red-800/50 hover:bg-red-200 dark:hover:bg-red-900/50'
+                  : 'bg-gray-100 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700/50'">
+          <svg v-if="guide.myLiked" class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          </svg>
+          <span v-text="`${guide.likeCount}`"></span>
+        </button>
+
+        <!-- 수정/삭제 버튼 (본인만) -->
+        <template v-if="guide.isMine">
+          <a :href="`/guide/${guide.guideSeq}/edit`"
+             class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white border-0 transition-colors duration-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            수정
+          </a>
+          <button @click="deleteGuide"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white border-0 transition-colors duration-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            삭제
+          </button>
+        </template>
       </div>
     </div>
 
     <!-- 콘텐츠 영역 -->
-    <div class="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-[#0f1011]">
+    <div class="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-50 to-white dark:from-[#0f1011] dark:to-[#0a0b0c]">
 
       <!-- 로딩 상태 -->
       <div v-if="isLoading" class="h-full flex items-center justify-center">
@@ -54,8 +97,8 @@
 
       <!-- 에러 상태 -->
       <div v-else-if="error" class="max-w-3xl mx-auto">
-        <div class="bg-white dark:bg-[#1e1f20] border border-red-200 dark:border-red-800 rounded-2xl p-6 flex items-start gap-3">
-          <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="bg-white dark:bg-[#1e1f20] border border-red-200 dark:border-red-800/50 rounded-2xl p-6 flex items-start gap-4 backdrop-blur-sm">
+          <svg class="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
@@ -69,355 +112,289 @@
       <!-- 가이드 상세 콘텐츠 -->
       <div v-else-if="guide" class="max-w-3xl mx-auto space-y-6">
 
-        <!-- 가이드 헤더 -->
-        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+        <!-- 메인 아티클 카드 (제목 + 메타 + 본문 + 첨부파일) -->
+        <article class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
 
-          <!-- 제목 -->
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4" v-text="guide.title"></h1>
-
-          <!-- 메타정보 (작성자, 날짜, 공개 상태) -->
-          <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-4">
-            <!-- 작성자 -->
-            <div class="flex items-center gap-2">
-              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-xs"
-                   v-text="guide.authorName.charAt(0)"></div>
-              <span v-text="guide.authorName"></span>
-            </div>
-
-            <!-- 작성일 -->
-            <div class="flex items-center gap-2 text-gray-500 dark:text-gray-500">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
-              <span v-text="formatDate(guide.createdAt)"></span>
-            </div>
+          <!-- 카드 헤더: 공개 상태 + 제목 + 메타정보 -->
+          <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700/30">
 
             <!-- 공개/비공개 뱃지 -->
-            <span v-if="guide.isPublic === 'Y'" class="px-2.5 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full">
-              공개
-            </span>
-            <span v-else class="px-2.5 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-semibold rounded-full">
-              비공개
-            </span>
-          </div>
+            <div class="mb-4">
+              <span v-if="guide.isPublic === 'Y'" class="inline-flex px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-bold rounded-full">
+                공개
+              </span>
+              <span v-else class="inline-flex px-3 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full">
+                비공개
+              </span>
+            </div>
 
-          <!-- 액션 버튼들 -->
-          <div class="flex flex-wrap items-center gap-2 mt-4">
+            <!-- 제목 -->
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4 leading-tight" v-text="guide.title"></h1>
 
-            <!-- 좋아요 버튼 -->
-            <button @click="toggleLike"
-                    :disabled="isLiking"
-                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
-                    :class="guide.myLiked
-                      ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
-                      : 'bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738]'">
-              <svg v-if="guide.myLiked" class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-              </svg>
-              <span v-text="`${guide.likeCount}`"></span>
-            </button>
-
-            <!-- 복사 버튼 -->
-            <button @click="copyContent"
-                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all"
-                    :class="contentCopied
-                      ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-300 dark:border-green-700'
-                      : 'bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738]'">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      v-if="!contentCopied"
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      v-else d="M5 13l4 4L19 7"/>
-              </svg>
-              <span v-text="contentCopied ? '복사됨!' : '복사'"></span>
-            </button>
-
-            <!-- 수정/삭제 버튼 (본인만) -->
-            <template v-if="guide.isMine">
-              <a :href="`/guide/${guide.guideSeq}/edit`"
-                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white border-0 transition-all">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
-                수정
-              </a>
-              <button @click="deleteGuide"
-                      class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white border-0 transition-all">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                삭제
-              </button>
-            </template>
-
-            <!-- 목록 링크 -->
-            <a href="/guide"
-               class="ml-auto flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738] transition-all">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-              </svg>
-              목록
-            </a>
-          </div>
-        </div>
-
-        <!-- 마크다운 본문 -->
-        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6 markdown-body"
-             v-html="renderedContent"
-             @click="handleMarkdownLinks">
-        </div>
-
-        <!-- 첨부파일 목록 -->
-        <div v-if="guide.files && guide.files.length > 0" class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-            </svg>
-            첨부파일
-          </h3>
-          <div class="space-y-2">
-            <a v-for="file in guide.files"
-               :key="file.fileSeq"
-               :href="`/api/guide/file/${file.fileSeq}/download`"
-               class="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-[#2a2b2c] hover:bg-gray-100 dark:hover:bg-[#363738] transition-colors group">
-              <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:underline truncate"
-                   v-text="file.originalName"></p>
-                <p class="text-xs text-gray-400 dark:text-gray-500"
-                   v-text="formatFileSize(file.fileSize)"></p>
+            <!-- 메타정보 (작성자, 날짜) -->
+            <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <!-- 작성자 -->
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-sm shadow-sm"
+                     v-text="guide.authorName.charAt(0)"></div>
+                <span class="font-medium text-gray-700 dark:text-gray-300" v-text="guide.authorName"></span>
               </div>
-              <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-              </svg>
-            </a>
-          </div>
-        </div>
 
-        <!-- 댓글 섹션 -->
-        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
-
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-            </svg>
-            댓글 <span class="text-gray-500 dark:text-gray-400" v-text="`(${totalComments})`"></span>
-          </h3>
-
-          <!-- 댓글 등록 폼 -->
-          <div class="mb-6 space-y-2">
-            <textarea v-model="newComment"
-                      placeholder="댓글을 입력하세요..."
-                      class="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                      rows="3"></textarea>
-            <div class="flex justify-end">
-              <button @click="addComment"
-                      :disabled="!newComment.trim() || isCommentSubmitting"
-                      class="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                      :class="newComment.trim() && !isCommentSubmitting
-                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
-                <span v-if="isCommentSubmitting" class="flex items-center gap-2">
-                  <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                  등록 중...
-                </span>
-                <span v-else>댓글 등록</span>
-              </button>
+              <!-- 작성일 -->
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <span v-text="formatDate(guide.createdAt)"></span>
+              </div>
             </div>
           </div>
 
-          <!-- 댓글 목록 (트리 구조) -->
-          <div v-if="comments.length > 0" class="space-y-3">
-            <div v-for="comment in comments" :key="comment.commentSeq" class="comment-item">
+          <!-- 카드 본문: 마크다운 콘텐츠 -->
+          <div class="px-8 py-8 markdown-body"
+               v-html="renderedContent"
+               @click="handleMarkdownLinks">
+          </div>
 
-              <!-- 루트 댓글 -->
-              <div class="bg-gray-50 dark:bg-[#2a2b2c] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="comment.authorName"></span>
-                      <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(comment.createdAt)"></span>
-                    </div>
-
-                    <!-- 댓글 콘텐츠 (편집 모드 아닐 때) -->
-                    <p v-if="editingCommentId !== comment.commentSeq"
-                       class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap" v-text="comment.content"></p>
-
-                    <!-- 댓글 편집 폼 -->
-                    <div v-else class="space-y-2">
-                      <textarea v-model="editingCommentContent"
-                                class="w-full px-3 py-2 rounded bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                                rows="2"></textarea>
-                      <div class="flex gap-2">
-                        <button @click="updateComment(comment.commentSeq)"
-                                :disabled="!editingCommentContent.trim() || isCommentUpdating"
-                                class="px-2 py-1 rounded text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed transition-all">
-                          저장
-                        </button>
-                        <button @click="cancelEditComment"
-                                class="px-2 py-1 rounded text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 dark:hover:bg-gray-700 transition-all">
-                          취소
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 액션 버튼 (답글, 수정, 삭제) -->
-                  <div class="flex flex-col gap-1.5 flex-shrink-0">
-                    <button v-if="editingCommentId !== comment.commentSeq"
-                            @click="showReplyForm(comment.commentSeq)"
-                            class="text-xs text-blue-500 hover:text-blue-600 font-medium">
-                      답글
-                    </button>
-                    <button v-if="comment.isMine && editingCommentId !== comment.commentSeq"
-                            @click="startEditComment(comment.commentSeq, comment.content)"
-                            class="text-xs text-blue-500 hover:text-blue-600 font-medium">
-                      수정
-                    </button>
-                    <button v-if="comment.isMine"
-                            @click="deleteComment(comment.commentSeq)"
-                            class="text-xs text-red-500 hover:text-red-600 font-medium">
-                      삭제
-                    </button>
-                  </div>
+          <!-- 카드 하단: 첨부파일 (있을 경우) -->
+          <div v-if="guide.files && guide.files.length > 0" class="px-8 py-6 border-t border-gray-100 dark:border-gray-700/30 bg-gray-50 dark:bg-[#1a1b1c]">
+            <h3 class="text-sm font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2 uppercase tracking-wider">
+              <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+              첨부파일
+            </h3>
+            <div class="space-y-2">
+              <a v-for="file in guide.files"
+                 :key="file.fileSeq"
+                 :href="`/api/file/${file.fileSeq}/download`"
+                 class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500/50 hover:shadow-md transition-all duration-220 group">
+                <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
                 </div>
-
-                <!-- 답글 폼 (동적으로 표시) -->
-                <div v-if="replyingToCommentId === comment.commentSeq" class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                  <div class="space-y-2">
-                    <textarea v-model="replyContent"
-                              placeholder="답글을 입력하세요..."
-                              class="w-full px-3 py-2 rounded bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                              rows="2"></textarea>
-                    <div class="flex gap-2">
-                      <button @click="addReply(comment.commentSeq)"
-                              :disabled="!replyContent.trim() || isReplySubmitting"
-                              class="px-3 py-1.5 rounded text-xs font-medium transition-all"
-                              :class="replyContent.trim() && !isReplySubmitting
-                                ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
-                        <span v-if="isReplySubmitting">등록 중...</span>
-                        <span v-else>답글 등록</span>
-                      </button>
-                      <button @click="cancelReplyForm"
-                              class="px-3 py-1.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all">
-                        취소
-                      </button>
-                    </div>
-                  </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate transition-colors"
+                     v-text="file.originalName"></p>
+                  <p class="text-xs text-gray-400 dark:text-gray-500"
+                     v-text="formatFileSize(file.fileSize)"></p>
                 </div>
+                <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 댓글 섹션 카드 -->
+        <section class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+
+          <!-- 섹션 헤더 -->
+          <div class="px-8 py-5 border-b border-gray-100 dark:border-gray-700/30 bg-gray-50 dark:bg-[#1a1b1c]">
+            <h2 class="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-3 uppercase tracking-wider">
+              <svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              </svg>
+              댓글
+              <span class="text-gray-500 dark:text-gray-400 text-sm font-normal ml-1" v-text="`(${totalComments})`"></span>
+            </h2>
+          </div>
+
+          <!-- 섹션 본문 -->
+          <div class="px-8 py-6 space-y-6">
+
+            <!-- 댓글 등록 폼 -->
+            <div class="space-y-3 pb-6 border-b border-gray-100 dark:border-gray-700/30">
+              <textarea v-model="newComment"
+                        placeholder="댓글을 남겨주세요..."
+                        class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all duration-220 resize-none"
+                        rows="3" writingsuggestions="false" spellcheck="false"></textarea>
+              <div class="flex justify-end">
+                <button @click="addComment"
+                        :disabled="!newComment.trim() || isCommentSubmitting"
+                        class="px-5 py-2 rounded-lg text-sm font-semibold transition-colors duration-200"
+                        :class="newComment.trim() && !isCommentSubmitting
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'"
+                        disabled:opacity-50 disabled:cursor-not-allowed>
+                  <span v-if="isCommentSubmitting" class="flex items-center gap-2">
+                    <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    등록 중...
+                  </span>
+                  <span v-else>댓글 등록</span>
+                </button>
               </div>
+            </div>
 
-              <!-- 대댓글 목록 (들여쓰기) -->
-              <div v-if="comment.replies && comment.replies.length > 0" class="ml-6 mt-2 space-y-2">
-                <div v-for="reply in comment.replies" :key="reply.commentSeq"
-                     class="bg-white dark:bg-[#1e1f20] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <div class="flex items-start justify-between gap-3">
+            <!-- 댓글 목록 -->
+            <div v-if="comments.length > 0" class="space-y-4">
+              <div v-for="comment in comments" :key="comment.commentSeq" class="comment-item">
+
+                <!-- 루트 댓글 -->
+                <div class="rounded-xl bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700/50 p-4">
+                  <div class="flex items-start justify-between gap-4">
                     <div class="flex-1">
-                      <div class="flex items-center gap-2 mb-1">
-                        <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9l6-6m0 0l6 6m-6-6v12a6 6 0 01-12 0v-3.5m12 3.5a6 6 0 01-12 0v-6.5"/>
-                        </svg>
-                        <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="reply.authorName"></span>
-                        <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(reply.createdAt)"></span>
+                      <!-- 헤더: 이름, 날짜 -->
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="comment.authorName"></span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(comment.createdAt)"></span>
                       </div>
 
-                      <!-- 대댓글 콘텐츠 (편집 모드 아닐 때) -->
-                      <p v-if="editingCommentId !== reply.commentSeq"
-                         class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap" v-text="reply.content"></p>
+                      <!-- 댓글 콘텐츠 (편집 모드 아닐 때) -->
+                      <p v-if="editingCommentId !== comment.commentSeq"
+                         class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed" v-text="comment.content"></p>
 
-                      <!-- 대댓글 편집 폼 -->
-                      <div v-else class="space-y-2">
+                      <!-- 댓글 편집 폼 -->
+                      <div v-else class="space-y-2 mt-2">
                         <textarea v-model="editingCommentContent"
-                                  class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-[#2a2b2c] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                                  rows="2"></textarea>
+                                  class="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                                  rows="2" writingsuggestions="false" spellcheck="false"></textarea>
                         <div class="flex gap-2">
-                          <button @click="updateComment(reply.commentSeq)"
+                          <button @click="updateComment(comment.commentSeq)"
                                   :disabled="!editingCommentContent.trim() || isCommentUpdating"
-                                  class="px-2 py-1 rounded text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed transition-all">
+                                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors duration-200">
                             저장
                           </button>
                           <button @click="cancelEditComment"
-                                  class="px-2 py-1 rounded text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 dark:hover:bg-gray-700 transition-all">
+                                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200">
                             취소
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    <!-- 액션 버튼 -->
-                    <div class="flex flex-col gap-1.5 flex-shrink-0">
-                      <button v-if="reply.isMine && editingCommentId !== reply.commentSeq"
-                              @click="startEditComment(reply.commentSeq, reply.content)"
-                              class="text-xs text-blue-500 hover:text-blue-600 font-medium">
+                    <!-- 액션 버튼들 (답글, 수정, 삭제) -->
+                    <div class="flex gap-3 flex-shrink-0 text-xs">
+                      <button v-if="editingCommentId !== comment.commentSeq"
+                              @click="showReplyForm(comment.commentSeq)"
+                              class="text-blue-500 hover:text-blue-600 font-medium hover:underline transition-colors">
+                        답글
+                      </button>
+                      <button v-if="comment.isMine && editingCommentId !== comment.commentSeq"
+                              @click="startEditComment(comment.commentSeq, comment.content)"
+                              class="text-blue-500 hover:text-blue-600 font-medium hover:underline transition-colors">
                         수정
                       </button>
-                      <button v-if="reply.isMine"
-                              @click="deleteComment(reply.commentSeq)"
-                              class="text-xs text-red-500 hover:text-red-600 font-medium">
+                      <button v-if="comment.isMine"
+                              @click="deleteComment(comment.commentSeq)"
+                              class="text-red-500 hover:text-red-600 font-medium hover:underline transition-colors">
                         삭제
                       </button>
+                    </div>
+                  </div>
+
+                  <!-- 답글 폼 -->
+                  <div v-if="replyingToCommentId === comment.commentSeq" class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                    <div class="space-y-2">
+                      <textarea v-model="replyContent"
+                                placeholder="답글을 입력하세요..."
+                                class="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                                rows="2" writingsuggestions="false" spellcheck="false"></textarea>
+                      <div class="flex gap-2">
+                        <button @click="addReply(comment.commentSeq)"
+                                :disabled="!replyContent.trim() || isReplySubmitting"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-200"
+                                :class="replyContent.trim() && !isReplySubmitting
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+                          <span v-if="isReplySubmitting">등록 중...</span>
+                          <span v-else>답글 등록</span>
+                        </button>
+                        <button @click="cancelReplyForm"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200">
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 대댓글 목록 -->
+                <div v-if="comment.replies && comment.replies.length > 0" class="ml-6 mt-3 space-y-3">
+                  <div v-for="reply in comment.replies" :key="reply.commentSeq"
+                       class="rounded-lg bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700/50 p-4">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex-1">
+                        <!-- 헤더: 답글 아이콘, 이름, 날짜 -->
+                        <div class="flex items-center gap-2 mb-2">
+                          <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6-6m-6 6l-6-6"/>
+                          </svg>
+                          <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="reply.authorName"></span>
+                          <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(reply.createdAt)"></span>
+                        </div>
+
+                        <!-- 대댓글 콘텐츠 (편집 모드 아닐 때) -->
+                        <p v-if="editingCommentId !== reply.commentSeq"
+                           class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed" v-text="reply.content"></p>
+
+                        <!-- 대댓글 편집 폼 -->
+                        <div v-else class="space-y-2 mt-2">
+                          <textarea v-model="editingCommentContent"
+                                    class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#2a2b2c] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                                    rows="2" writingsuggestions="false" spellcheck="false"></textarea>
+                          <div class="flex gap-2">
+                            <button @click="updateComment(reply.commentSeq)"
+                                    :disabled="!editingCommentContent.trim() || isCommentUpdating"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors duration-200">
+                              저장
+                            </button>
+                            <button @click="cancelEditComment"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200">
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 액션 버튼 -->
+                      <div class="flex gap-3 flex-shrink-0 text-xs">
+                        <button v-if="reply.isMine && editingCommentId !== reply.commentSeq"
+                                @click="startEditComment(reply.commentSeq, reply.content)"
+                                class="text-blue-500 hover:text-blue-600 font-medium hover:underline transition-colors">
+                          수정
+                        </button>
+                        <button v-if="reply.isMine"
+                                @click="deleteComment(reply.commentSeq)"
+                                class="text-red-500 hover:text-red-600 font-medium hover:underline transition-colors">
+                          삭제
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 댓글 없음 -->
-          <div v-else class="text-center py-8">
-            <svg class="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-            </svg>
-            <p class="text-sm text-gray-400 dark:text-gray-500">아직 댓글이 없습니다. 첫 번째 댓글을 남겨보세요!</p>
+            <!-- 댓글 없음 -->
+            <div v-else class="text-center py-12">
+              <svg class="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+              <p class="text-sm text-gray-400 dark:text-gray-500">아직 댓글이 없습니다.</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">첫 번째 댓글을 남겨보세요!</p>
+            </div>
           </div>
-        </div>
+        </section>
 
       </div>
     </div>
+
   </main>
 
-  <!-- 토스트 알림 (에러 또는 성공) -->
-  <transition name="toast">
-    <div v-if="toast.msg"
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
-         :class="toast.type === 'success'
-           ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
-           : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
-      <svg v-if="toast.type === 'error'"
-           class="w-4 h-4 text-red-400 flex-shrink-0"
-           fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-      </svg>
-      <svg v-else
-           class="w-4 h-4 text-green-300 flex-shrink-0"
-           fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-      </svg>
-      <span v-text="toast.msg"></span>
-    </div>
-  </transition>
-
   <script>
+    if (typeof CommonUI !== 'undefined') CommonUI.install();
+
     const { createApp, ref, computed, onMounted } = Vue;
 
     // Thymeleaf 변수
@@ -434,31 +411,12 @@
         const newComment = ref('');
         const isCommentSubmitting = ref(false);
         const isLiking = ref(false);
-        const contentCopied = ref(false);
-        const toast = ref({ msg: '', type: 'error' });
         const replyingToCommentId = ref(null);
         const replyContent = ref('');
         const isReplySubmitting = ref(false);
         const editingCommentId = ref(null);
         const editingCommentContent = ref('');
         const isCommentUpdating = ref(false);
-
-        let toastTimer = null;
-
-        /**
-         * 토스트 메시지를 표시한다.
-         * 3초 후 자동으로 사라진다.
-         *
-         * @param {string} msg 표시할 메시지
-         * @param {string} type 토스트 타입 ('success' 또는 'error')
-         */
-        function showToast(msg, type = 'error') {
-          toast.value = { msg, type };
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => {
-            toast.value = { msg: '', type: 'error' };
-          }, 3000);
-        }
 
         /**
          * 페이지 로드 시 가이드 상세 정보를 조회한다.
@@ -524,33 +482,15 @@
             if (response.data?.success) {
               guide.value.myLiked = response.data.result.liked;
               guide.value.likeCount = response.data.result.likeCount;
-              showToast(guide.value.myLiked ? '좋아요를 눌렀습니다.' : '좋아요가 취소되었습니다.', 'success');
+              CommonUI.toast(guide.value.myLiked ? '좋아요를 눌렀습니다.' : '좋아요가 취소되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '처리 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '처리 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('좋아요 오류:', err);
-            showToast(err.response?.data?.message || '처리 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '처리 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isLiking.value = false;
-          }
-        }
-
-        /**
-         * 본문 내용을 클립보드에 복사한다.
-         */
-        async function copyContent() {
-          if (!guide.value) return;
-          try {
-            await navigator.clipboard.writeText(guide.value.content);
-            contentCopied.value = true;
-            showToast('클립보드에 복사되었습니다.', 'success');
-            setTimeout(() => {
-              contentCopied.value = false;
-            }, 2000);
-          } catch (err) {
-            console.error('클립보드 복사 실패:', err);
-            showToast('클립보드 복사에 실패했습니다.');
           }
         }
 
@@ -563,16 +503,16 @@
           try {
             const response = await axios.post(`/api/guide/${guideSeq}/delete`);
             if (response.data?.success) {
-              showToast('가이드가 삭제되었습니다.', 'success');
+              CommonUI.toast('가이드가 삭제되었습니다.', { type: 'success' });
               setTimeout(() => {
                 window.location.href = '/guide';
               }, 500);
             } else {
-              showToast(response.data?.message || '삭제 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('삭제 오류:', err);
-            showToast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
           }
         }
 
@@ -590,13 +530,13 @@
             if (response.data?.success) {
               newComment.value = '';
               await loadComments();
-              showToast('댓글이 등록되었습니다.', 'success');
+              CommonUI.toast('댓글이 등록되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '댓글 등록 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '댓글 등록 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('댓글 등록 오류:', err);
-            showToast(err.response?.data?.message || '댓글 등록 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '댓글 등록 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isCommentSubmitting.value = false;
           }
@@ -638,13 +578,13 @@
               replyContent.value = '';
               replyingToCommentId.value = null;
               await loadComments();
-              showToast('답글이 등록되었습니다.', 'success');
+              CommonUI.toast('답글이 등록되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '답글 등록 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '답글 등록 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('답글 등록 오류:', err);
-            showToast(err.response?.data?.message || '답글 등록 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '답글 등록 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isReplySubmitting.value = false;
           }
@@ -686,13 +626,13 @@
               editingCommentId.value = null;
               editingCommentContent.value = '';
               await loadComments();
-              showToast('댓글이 수정되었습니다.', 'success');
+              CommonUI.toast('댓글이 수정되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '수정 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '수정 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('댓글 수정 오류:', err);
-            showToast(err.response?.data?.message || '수정 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '수정 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isCommentUpdating.value = false;
           }
@@ -710,13 +650,13 @@
             const response = await axios.post(`/api/guide/comments/${commentSeq}/delete`);
             if (response.data?.success) {
               await loadComments();
-              showToast('댓글이 삭제되었습니다.', 'success');
+              CommonUI.toast('댓글이 삭제되었습니다.', { type: 'success' });
             } else {
-              showToast(response.data?.message || '삭제 중 오류가 발생했습니다.');
+              CommonUI.toast(response.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('댓글 삭제 오류:', err);
-            showToast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+            CommonUI.toast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.', { type: 'error' });
           }
         }
 
@@ -841,11 +781,11 @@
 
         return {
           guide, isLoading, error, comments, totalComments,
-          newComment, isCommentSubmitting, isLiking, contentCopied,
-          toast, renderedContent,
+          newComment, isCommentSubmitting, isLiking,
+          renderedContent,
           replyingToCommentId, replyContent, isReplySubmitting,
           editingCommentId, editingCommentContent, isCommentUpdating,
-          toggleLike, copyContent, deleteGuide, addComment,
+          toggleLike, deleteGuide, addComment,
           showReplyForm, cancelReplyForm, addReply,
           startEditComment, cancelEditComment, updateComment, deleteComment,
           formatDate, formatFileSize, handleMarkdownLinks

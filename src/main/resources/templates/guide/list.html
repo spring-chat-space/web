@@ -35,7 +35,7 @@
         </div>
         <!-- 새 가이드 작성 버튼 -->
         <a href="/guide/write"
-           class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm transition-all hover:shadow-md">
+           class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
@@ -60,7 +60,7 @@
           <input v-model="searchKeyword"
                  type="text"
                  placeholder="가이드 검색..."
-                 class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" />
+                 class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-colors" />
         </div>
 
         <!-- 정렬 탭 -->
@@ -88,7 +88,7 @@
         <!-- 로딩 상태 -->
         <div v-if="isLoading" class="h-full flex items-center justify-center">
           <div class="text-center">
-            <svg class="w-9 h-9 spin text-green-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-9 h-9 spin text-blue-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
@@ -114,75 +114,56 @@
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           <div v-for="guide in guides" :key="guide.guideSeq"
                @click="navigateToGuide(guide.guideSeq)"
-               class="bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-2xl p-5 cursor-pointer transition-all hover:shadow-lg hover:border-gray-300 dark:hover:border-gray-600 hover:scale-105 group">
+               class="bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 group">
 
-            <!-- 카드 헤더: 제목 + 공개/비공개 아이콘 -->
-            <div class="flex items-start justify-between gap-2 mb-3">
-              <h3 class="flex-1 text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
-                {{ guide.title }}
-              </h3>
-              <!-- 비공개 아이콘 (서버가 본인 비공개 가이드만 반환하므로 isPublic 조건만으로 충분) -->
+            <!-- 카드 상단: 제목 + 비공개 아이콘 + 좋아요 -->
+            <div class="relative p-5 pb-4">
+              <!-- 비공개 아이콘 -->
               <div v-if="guide.isPublic === 'N'"
-                   class="flex-shrink-0 w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded flex items-center justify-center">
+                   class="absolute top-4 right-4 w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded flex items-center justify-center">
                 <svg class="w-3 h-3 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.02l7 3.5v5.48c0 4.65-2.56 8.93-7 10.98-4.44-2.05-7-6.33-7-10.98v-5.48l7-3.5z"/>
                 </svg>
               </div>
-            </div>
-
-            <!-- 카드 본문: 작성자, 날짜 -->
-            <div class="flex items-center justify-between text-xs mb-4 pb-4 border-b border-gray-100 dark:border-gray-700/50">
-              <div class="text-gray-600 dark:text-gray-400">
-                <p v-text="guide.authorName"></p>
-                <p class="mt-0.5" v-text="formatDate(guide.createdAt)"></p>
-              </div>
-            </div>
-
-            <!-- 카드 풋터: 좋아요 -->
-            <div class="flex items-center gap-1 text-xs">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-3 pr-6 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                {{ guide.title }}
+              </h3>
+              <!-- 좋아요 버튼 -->
               <button @click.stop="toggleLike(guide.guideSeq, guide.myLiked)"
-                      class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all"
+                      class="flex items-center gap-1.5 text-xs font-medium transition-colors"
                       :class="guide.myLiked
-                        ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                        : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#333435]'">
-                <svg class="w-3.5 h-3.5" :fill="guide.myLiked ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
+                        ? 'text-red-500 dark:text-red-400'
+                        : 'text-gray-400 dark:text-gray-500 hover:text-red-400 dark:hover:text-red-400'">
+                <svg class="w-4 h-4" :fill="guide.myLiked ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                 </svg>
                 <span v-text="guide.likeCount"></span>
               </button>
             </div>
+
+            <!-- 카드 하단: 작성자 아바타 + 이름 + 날짜 -->
+            <div class="px-5 py-3.5 border-t border-gray-100 dark:border-gray-700/50 flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <span class="text-xs font-bold text-blue-600 dark:text-blue-400" v-text="guide.authorName?.charAt(0) || '?'"></span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" v-text="guide.authorName"></p>
+                <p class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(guide.createdAt)"></p>
+              </div>
+            </div>
+
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- 토스트 알림 -->
-    <transition name="toast">
-      <div v-if="toast.msg"
-           class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
-           :class="toast.type === 'success'
-             ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
-             : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
-        <svg v-if="toast.type === 'error'"
-             class="w-4 h-4 text-red-400 flex-shrink-0"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <svg v-else
-             class="w-4 h-4 text-green-300 flex-shrink-0"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
-        <span v-text="toast.msg"></span>
-      </div>
-    </transition>
-
   </main>
 
   <script>
+    if (typeof CommonUI !== 'undefined') CommonUI.install();
+
     const { createApp, ref, watch, computed, onMounted } = Vue;
 
     createApp({
@@ -193,24 +174,6 @@
         const isLoading         = ref(false);
         const searchKeyword     = ref('');
         const sortType          = ref('like');  // 'like' 또는 'recent'
-        const toast             = ref({ msg: '', type: 'error' });
-        let toastTimer          = null;
-
-        /**
-         * 토스트 메시지를 표시한다.
-         * 3초 후 자동으로 사라진다.
-         *
-         * @param {string} msg 표시할 메시지
-         * @param {string} type 토스트 타입 ('success' 또는 'error')
-         */
-        function showToast(msg, type = 'error') {
-          toast.value = { msg, type };
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => {
-            toast.value = { msg: '', type: 'error' };
-          }, 3000);
-        }
-
         /**
          * 날짜를 'YYYY-MM-DD' 형식으로 포맷한다.
          *
@@ -246,11 +209,11 @@
             if (response.data?.success) {
               guides.value = response.data.result ?? [];
             } else {
-              showToast(response.data?.message || '가이드 로드에 실패했습니다.', 'error');
+              CommonUI.toast(response.data?.message || '가이드 로드에 실패했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('가이드 로드 오류:', err);
-            showToast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', 'error');
+            CommonUI.toast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', { type: 'error' });
           } finally {
             isLoading.value = false;
           }
@@ -298,11 +261,11 @@
               // 가이드 목록 재조회
               await loadGuides();
             } else {
-              showToast(response.data?.message || '좋아요 처리에 실패했습니다.', 'error');
+              CommonUI.toast(response.data?.message || '좋아요 처리에 실패했습니다.', { type: 'error' });
             }
           } catch (err) {
             console.error('좋아요 처리 오류:', err);
-            showToast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', 'error');
+            CommonUI.toast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', { type: 'error' });
           }
         }
 
@@ -318,11 +281,9 @@
           isLoading,
           searchKeyword,
           sortType,
-          toast,
           formatDate,
           navigateToGuide,
           toggleLike,
-          showToast
         };
       }
     }).mount('#guideListApp');
