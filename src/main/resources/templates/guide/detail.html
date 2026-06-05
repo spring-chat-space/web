@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>가이드 상세 - Chat Space</title>
+  <link rel="stylesheet" href="/common-ui/chat-vue.css">
+  <link rel="stylesheet" href="/css/chat.css">
+  <script src="/vendor/vue.global.prod.js"></script>
+  <script src="/vendor/axios.min.js"></script>
+  <script src="/common-ui/common-ui.umd.js"></script>
+  <!-- marked.js CDN for 마크다운 렌더링 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
+
+  <!-- 사이드바 프래그먼트 -->
+  <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+
+  <!-- 사이드바 접혔을 때 펼치기 버튼 -->
+  <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
+          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+    </svg>
+  </button>
+
+  <!-- ====== Vue 앱 영역 (가이드 상세) ====== -->
+  <main id="guideDetailApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
+
+    <!-- 페이지 헤더 -->
+    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">가이드</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">커뮤니티 가이드 문서를 확인하세요.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 콘텐츠 영역 -->
+    <div class="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-[#0f1011]">
+
+      <!-- 로딩 상태 -->
+      <div v-if="isLoading" class="h-full flex items-center justify-center">
+        <div class="text-center">
+          <svg class="w-9 h-9 spin text-blue-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          <p class="text-sm font-medium text-gray-500 dark:text-gray-400">가이드를 불러오는 중...</p>
+        </div>
+      </div>
+
+      <!-- 에러 상태 -->
+      <div v-else-if="error" class="max-w-3xl mx-auto">
+        <div class="bg-white dark:bg-[#1e1f20] border border-red-200 dark:border-red-800 rounded-2xl p-6 flex items-start gap-3">
+          <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div>
+            <p class="text-sm font-semibold text-red-600 dark:text-red-400">오류가 발생했습니다</p>
+            <p class="text-xs text-red-600 dark:text-red-400 mt-1" v-text="error"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 가이드 상세 콘텐츠 -->
+      <div v-else-if="guide" class="max-w-3xl mx-auto space-y-6">
+
+        <!-- 가이드 헤더 -->
+        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+
+          <!-- 제목 -->
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4" v-text="guide.title"></h1>
+
+          <!-- 메타정보 (작성자, 날짜, 공개 상태) -->
+          <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-4">
+            <!-- 작성자 -->
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-xs"
+                   v-text="guide.authorName.charAt(0)"></div>
+              <span v-text="guide.authorName"></span>
+            </div>
+
+            <!-- 작성일 -->
+            <div class="flex items-center gap-2 text-gray-500 dark:text-gray-500">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+              <span v-text="formatDate(guide.createdAt)"></span>
+            </div>
+
+            <!-- 공개/비공개 뱃지 -->
+            <span v-if="guide.isPublic === 'Y'" class="px-2.5 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full">
+              공개
+            </span>
+            <span v-else class="px-2.5 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-semibold rounded-full">
+              비공개
+            </span>
+          </div>
+
+          <!-- 액션 버튼들 -->
+          <div class="flex flex-wrap items-center gap-2 mt-4">
+
+            <!-- 좋아요 버튼 -->
+            <button @click="toggleLike"
+                    :disabled="isLiking"
+                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+                    :class="guide.myLiked
+                      ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
+                      : 'bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738]'">
+              <svg v-if="guide.myLiked" class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+              </svg>
+              <span v-text="`${guide.likeCount}`"></span>
+            </button>
+
+            <!-- 복사 버튼 -->
+            <button @click="copyContent"
+                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all"
+                    :class="contentCopied
+                      ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-300 dark:border-green-700'
+                      : 'bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738]'">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      v-if="!contentCopied"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      v-else d="M5 13l4 4L19 7"/>
+              </svg>
+              <span v-text="contentCopied ? '복사됨!' : '복사'"></span>
+            </button>
+
+            <!-- 수정/삭제 버튼 (본인만) -->
+            <template v-if="guide.isMine">
+              <a :href="`/guide/${guide.guideSeq}/edit`"
+                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white border-0 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                수정
+              </a>
+              <button @click="deleteGuide"
+                      class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white border-0 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                삭제
+              </button>
+            </template>
+
+            <!-- 목록 링크 -->
+            <a href="/guide"
+               class="ml-auto flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#363738] transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+              목록
+            </a>
+          </div>
+        </div>
+
+        <!-- 마크다운 본문 -->
+        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6 markdown-body"
+             v-html="renderedContent"
+             @click="handleMarkdownLinks">
+        </div>
+
+        <!-- 첨부파일 목록 -->
+        <div v-if="guide.files && guide.files.length > 0" class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+            첨부파일
+          </h3>
+          <div class="space-y-2">
+            <a v-for="file in guide.files"
+               :key="file.fileSeq"
+               :href="`/api/guide/file/${file.fileSeq}/download`"
+               class="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-[#2a2b2c] hover:bg-gray-100 dark:hover:bg-[#363738] transition-colors group">
+              <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:underline truncate"
+                   v-text="file.originalName"></p>
+                <p class="text-xs text-gray-400 dark:text-gray-500"
+                   v-text="formatFileSize(file.fileSize)"></p>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- 댓글 섹션 -->
+        <div class="bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+            댓글 <span class="text-gray-500 dark:text-gray-400" v-text="`(${totalComments})`"></span>
+          </h3>
+
+          <!-- 댓글 등록 폼 -->
+          <div class="mb-6 space-y-2">
+            <textarea v-model="newComment"
+                      placeholder="댓글을 입력하세요..."
+                      class="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                      rows="3"></textarea>
+            <div class="flex justify-end">
+              <button @click="addComment"
+                      :disabled="!newComment.trim() || isCommentSubmitting"
+                      class="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                      :class="newComment.trim() && !isCommentSubmitting
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+                <span v-if="isCommentSubmitting" class="flex items-center gap-2">
+                  <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  등록 중...
+                </span>
+                <span v-else>댓글 등록</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 댓글 목록 (트리 구조) -->
+          <div v-if="comments.length > 0" class="space-y-3">
+            <div v-for="comment in comments" :key="comment.commentSeq" class="comment-item">
+
+              <!-- 루트 댓글 -->
+              <div class="bg-gray-50 dark:bg-[#2a2b2c] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="comment.authorName"></span>
+                      <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(comment.createdAt)"></span>
+                    </div>
+
+                    <!-- 댓글 콘텐츠 (편집 모드 아닐 때) -->
+                    <p v-if="editingCommentId !== comment.commentSeq"
+                       class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap" v-text="comment.content"></p>
+
+                    <!-- 댓글 편집 폼 -->
+                    <div v-else class="space-y-2">
+                      <textarea v-model="editingCommentContent"
+                                class="w-full px-3 py-2 rounded bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                                rows="2"></textarea>
+                      <div class="flex gap-2">
+                        <button @click="updateComment(comment.commentSeq)"
+                                :disabled="!editingCommentContent.trim() || isCommentUpdating"
+                                class="px-2 py-1 rounded text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed transition-all">
+                          저장
+                        </button>
+                        <button @click="cancelEditComment"
+                                class="px-2 py-1 rounded text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 dark:hover:bg-gray-700 transition-all">
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 액션 버튼 (답글, 수정, 삭제) -->
+                  <div class="flex flex-col gap-1.5 flex-shrink-0">
+                    <button v-if="editingCommentId !== comment.commentSeq"
+                            @click="showReplyForm(comment.commentSeq)"
+                            class="text-xs text-blue-500 hover:text-blue-600 font-medium">
+                      답글
+                    </button>
+                    <button v-if="comment.isMine && editingCommentId !== comment.commentSeq"
+                            @click="startEditComment(comment.commentSeq, comment.content)"
+                            class="text-xs text-blue-500 hover:text-blue-600 font-medium">
+                      수정
+                    </button>
+                    <button v-if="comment.isMine"
+                            @click="deleteComment(comment.commentSeq)"
+                            class="text-xs text-red-500 hover:text-red-600 font-medium">
+                      삭제
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 답글 폼 (동적으로 표시) -->
+                <div v-if="replyingToCommentId === comment.commentSeq" class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                  <div class="space-y-2">
+                    <textarea v-model="replyContent"
+                              placeholder="답글을 입력하세요..."
+                              class="w-full px-3 py-2 rounded bg-white dark:bg-[#1e1f20] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                              rows="2"></textarea>
+                    <div class="flex gap-2">
+                      <button @click="addReply(comment.commentSeq)"
+                              :disabled="!replyContent.trim() || isReplySubmitting"
+                              class="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                              :class="replyContent.trim() && !isReplySubmitting
+                                ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+                        <span v-if="isReplySubmitting">등록 중...</span>
+                        <span v-else>답글 등록</span>
+                      </button>
+                      <button @click="cancelReplyForm"
+                              class="px-3 py-1.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all">
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 대댓글 목록 (들여쓰기) -->
+              <div v-if="comment.replies && comment.replies.length > 0" class="ml-6 mt-2 space-y-2">
+                <div v-for="reply in comment.replies" :key="reply.commentSeq"
+                     class="bg-white dark:bg-[#1e1f20] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9l6-6m0 0l6 6m-6-6v12a6 6 0 01-12 0v-3.5m12 3.5a6 6 0 01-12 0v-6.5"/>
+                        </svg>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-gray-100" v-text="reply.authorName"></span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500" v-text="formatDate(reply.createdAt)"></span>
+                      </div>
+
+                      <!-- 대댓글 콘텐츠 (편집 모드 아닐 때) -->
+                      <p v-if="editingCommentId !== reply.commentSeq"
+                         class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap" v-text="reply.content"></p>
+
+                      <!-- 대댓글 편집 폼 -->
+                      <div v-else class="space-y-2">
+                        <textarea v-model="editingCommentContent"
+                                  class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-[#2a2b2c] border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                                  rows="2"></textarea>
+                        <div class="flex gap-2">
+                          <button @click="updateComment(reply.commentSeq)"
+                                  :disabled="!editingCommentContent.trim() || isCommentUpdating"
+                                  class="px-2 py-1 rounded text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed transition-all">
+                            저장
+                          </button>
+                          <button @click="cancelEditComment"
+                                  class="px-2 py-1 rounded text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 dark:hover:bg-gray-700 transition-all">
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 액션 버튼 -->
+                    <div class="flex flex-col gap-1.5 flex-shrink-0">
+                      <button v-if="reply.isMine && editingCommentId !== reply.commentSeq"
+                              @click="startEditComment(reply.commentSeq, reply.content)"
+                              class="text-xs text-blue-500 hover:text-blue-600 font-medium">
+                        수정
+                      </button>
+                      <button v-if="reply.isMine"
+                              @click="deleteComment(reply.commentSeq)"
+                              class="text-xs text-red-500 hover:text-red-600 font-medium">
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 댓글 없음 -->
+          <div v-else class="text-center py-8">
+            <svg class="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+            <p class="text-sm text-gray-400 dark:text-gray-500">아직 댓글이 없습니다. 첫 번째 댓글을 남겨보세요!</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 토스트 알림 (에러 또는 성공) -->
+  <transition name="toast">
+    <div v-if="toast.msg"
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
+         :class="toast.type === 'success'
+           ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
+           : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
+      <svg v-if="toast.type === 'error'"
+           class="w-4 h-4 text-red-400 flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <svg v-else
+           class="w-4 h-4 text-green-300 flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      <span v-text="toast.msg"></span>
+    </div>
+  </transition>
+
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    // Thymeleaf 변수
+    const guideSeq = [[${guideSeq}]];
+    const adminId = /*[[${user != null ? user.adminId : ''}]]*/ '';
+
+    createApp({
+      setup() {
+        const guide = ref(null);
+        const isLoading = ref(true);
+        const error = ref('');
+        const comments = ref([]);
+        const totalComments = ref(0);
+        const newComment = ref('');
+        const isCommentSubmitting = ref(false);
+        const isLiking = ref(false);
+        const contentCopied = ref(false);
+        const toast = ref({ msg: '', type: 'error' });
+        const replyingToCommentId = ref(null);
+        const replyContent = ref('');
+        const isReplySubmitting = ref(false);
+        const editingCommentId = ref(null);
+        const editingCommentContent = ref('');
+        const isCommentUpdating = ref(false);
+
+        let toastTimer = null;
+
+        /**
+         * 토스트 메시지를 표시한다.
+         * 3초 후 자동으로 사라진다.
+         *
+         * @param {string} msg 표시할 메시지
+         * @param {string} type 토스트 타입 ('success' 또는 'error')
+         */
+        function showToast(msg, type = 'error') {
+          toast.value = { msg, type };
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => {
+            toast.value = { msg: '', type: 'error' };
+          }, 3000);
+        }
+
+        /**
+         * 페이지 로드 시 가이드 상세 정보를 조회한다.
+         * GET /api/guide/{guideSeq}
+         */
+        async function loadGuide() {
+          try {
+            isLoading.value = true;
+            error.value = '';
+            const response = await axios.get(`/api/guide/${guideSeq}`);
+            if (response.data?.success) {
+              guide.value = response.data.result;
+            } else {
+              error.value = response.data?.message || '가이드를 불러올 수 없습니다.';
+            }
+          } catch (err) {
+            console.error('가이드 조회 오류:', err);
+            error.value = err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.';
+          } finally {
+            isLoading.value = false;
+          }
+        }
+
+        /**
+         * 댓글 목록을 조회한다.
+         * GET /api/guide/{guideSeq}/comments
+         */
+        async function loadComments() {
+          try {
+            const response = await axios.get(`/api/guide/${guideSeq}/comments`);
+            if (response.data?.success) {
+              comments.value = response.data.result.comments || [];
+              totalComments.value = response.data.result.totalCount || 0;
+            }
+          } catch (err) {
+            console.error('댓글 조회 오류:', err);
+          }
+        }
+
+        /**
+         * 마크다운 콘텐츠를 HTML로 렌더링한다.
+         * marked.js를 사용하여 변환한다.
+         */
+        const renderedContent = computed(() => {
+          if (!guide.value || !guide.value.content) return '';
+          try {
+            return marked.parse(guide.value.content);
+          } catch (err) {
+            console.error('마크다운 렌더링 오류:', err);
+            return guide.value.content;
+          }
+        });
+
+        /**
+         * 좋아요 버튼 토글 처리.
+         * POST /api/guide/{guideSeq}/like
+         */
+        async function toggleLike() {
+          if (!guide.value || isLiking.value) return;
+          try {
+            isLiking.value = true;
+            const response = await axios.post(`/api/guide/${guideSeq}/like`);
+            if (response.data?.success) {
+              guide.value.myLiked = response.data.result.liked;
+              guide.value.likeCount = response.data.result.likeCount;
+              showToast(guide.value.myLiked ? '좋아요를 눌렀습니다.' : '좋아요가 취소되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '처리 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('좋아요 오류:', err);
+            showToast(err.response?.data?.message || '처리 중 오류가 발생했습니다.');
+          } finally {
+            isLiking.value = false;
+          }
+        }
+
+        /**
+         * 본문 내용을 클립보드에 복사한다.
+         */
+        async function copyContent() {
+          if (!guide.value) return;
+          try {
+            await navigator.clipboard.writeText(guide.value.content);
+            contentCopied.value = true;
+            showToast('클립보드에 복사되었습니다.', 'success');
+            setTimeout(() => {
+              contentCopied.value = false;
+            }, 2000);
+          } catch (err) {
+            console.error('클립보드 복사 실패:', err);
+            showToast('클립보드 복사에 실패했습니다.');
+          }
+        }
+
+        /**
+         * 가이드를 삭제한다.
+         * POST /api/guide/{guideSeq}/delete
+         */
+        async function deleteGuide() {
+          if (!confirm('정말로 이 가이드를 삭제하시겠습니까?')) return;
+          try {
+            const response = await axios.post(`/api/guide/${guideSeq}/delete`);
+            if (response.data?.success) {
+              showToast('가이드가 삭제되었습니다.', 'success');
+              setTimeout(() => {
+                window.location.href = '/guide';
+              }, 500);
+            } else {
+              showToast(response.data?.message || '삭제 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('삭제 오류:', err);
+            showToast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+          }
+        }
+
+        /**
+         * 댓글을 등록한다.
+         * POST /api/guide/{guideSeq}/comments
+         */
+        async function addComment() {
+          if (!newComment.value.trim() || isCommentSubmitting.value) return;
+          try {
+            isCommentSubmitting.value = true;
+            const response = await axios.post(`/api/guide/${guideSeq}/comments`, {
+              content: newComment.value
+            });
+            if (response.data?.success) {
+              newComment.value = '';
+              await loadComments();
+              showToast('댓글이 등록되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '댓글 등록 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('댓글 등록 오류:', err);
+            showToast(err.response?.data?.message || '댓글 등록 중 오류가 발생했습니다.');
+          } finally {
+            isCommentSubmitting.value = false;
+          }
+        }
+
+        /**
+         * 답글 폼을 표시한다.
+         *
+         * @param {number} commentSeq 부모 댓글 ID
+         */
+        function showReplyForm(commentSeq) {
+          replyingToCommentId.value = commentSeq;
+          replyContent.value = '';
+        }
+
+        /**
+         * 답글 폼을 닫는다.
+         */
+        function cancelReplyForm() {
+          replyingToCommentId.value = null;
+          replyContent.value = '';
+        }
+
+        /**
+         * 답글을 등록한다.
+         * POST /api/guide/{guideSeq}/comments (body에 parentSeq 포함)
+         *
+         * @param {number} parentSeq 부모 댓글 ID
+         */
+        async function addReply(parentSeq) {
+          if (!replyContent.value.trim() || isReplySubmitting.value) return;
+          try {
+            isReplySubmitting.value = true;
+            const response = await axios.post(`/api/guide/${guideSeq}/comments`, {
+              content: replyContent.value,
+              parentSeq: parentSeq
+            });
+            if (response.data?.success) {
+              replyContent.value = '';
+              replyingToCommentId.value = null;
+              await loadComments();
+              showToast('답글이 등록되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '답글 등록 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('답글 등록 오류:', err);
+            showToast(err.response?.data?.message || '답글 등록 중 오류가 발생했습니다.');
+          } finally {
+            isReplySubmitting.value = false;
+          }
+        }
+
+        /**
+         * 댓글 수정을 시작한다.
+         *
+         * @param {number} commentSeq 댓글 ID
+         * @param {string} content 기존 내용
+         */
+        function startEditComment(commentSeq, content) {
+          editingCommentId.value = commentSeq;
+          editingCommentContent.value = content;
+        }
+
+        /**
+         * 댓글 수정을 취소한다.
+         */
+        function cancelEditComment() {
+          editingCommentId.value = null;
+          editingCommentContent.value = '';
+        }
+
+        /**
+         * 댓글을 수정한다.
+         * POST /api/guide/comments/{commentSeq}/update
+         *
+         * @param {number} commentSeq 댓글 ID
+         */
+        async function updateComment(commentSeq) {
+          if (!editingCommentContent.value.trim() || isCommentUpdating.value) return;
+          try {
+            isCommentUpdating.value = true;
+            const response = await axios.post(`/api/guide/comments/${commentSeq}/update`, {
+              content: editingCommentContent.value
+            });
+            if (response.data?.success) {
+              editingCommentId.value = null;
+              editingCommentContent.value = '';
+              await loadComments();
+              showToast('댓글이 수정되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '수정 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('댓글 수정 오류:', err);
+            showToast(err.response?.data?.message || '수정 중 오류가 발생했습니다.');
+          } finally {
+            isCommentUpdating.value = false;
+          }
+        }
+
+        /**
+         * 댓글을 삭제한다.
+         * POST /api/guide/comments/{commentSeq}/delete
+         *
+         * @param {number} commentSeq 댓글 ID
+         */
+        async function deleteComment(commentSeq) {
+          if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) return;
+          try {
+            const response = await axios.post(`/api/guide/comments/${commentSeq}/delete`);
+            if (response.data?.success) {
+              await loadComments();
+              showToast('댓글이 삭제되었습니다.', 'success');
+            } else {
+              showToast(response.data?.message || '삭제 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('댓글 삭제 오류:', err);
+            showToast(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+          }
+        }
+
+        /**
+         * 날짜를 한국식 포맷으로 변환한다.
+         * (예: 2024-06-05)
+         *
+         * @param {string} dateStr ISO 날짜 문자열
+         * @returns {string} 포맷된 날짜
+         */
+        function formatDate(dateStr) {
+          if (!dateStr) return '';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+        }
+
+        /**
+         * 파일 크기를 읽기 쉬운 형식으로 변환한다.
+         * (예: 1.5 MB, 512 KB)
+         *
+         * @param {number} bytes 바이트 단위의 파일 크기
+         * @returns {string} 포맷된 파일 크기
+         */
+        function formatFileSize(bytes) {
+          if (!bytes) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        /**
+         * 마크다운 HTML의 링크를 처리한다.
+         * 외부 링크는 새 탭에서 열도록 설정한다.
+         *
+         * @param {Event} event 클릭 이벤트
+         */
+        function handleMarkdownLinks(event) {
+          if (event.target.tagName === 'A') {
+            event.target.target = '_blank';
+            event.target.rel = 'noopener noreferrer';
+          }
+        }
+
+        // 마크다운 본문 스타일 적용
+        function applyMarkdownStyles() {
+          const content = document.querySelector('.markdown-body');
+          if (!content) return;
+
+          // 제목 스타일
+          content.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
+            el.classList.add('font-bold', 'my-3', 'text-gray-900', 'dark:text-gray-100');
+            if (el.tagName === 'H1') el.classList.add('text-2xl', 'border-b', 'border-gray-200', 'dark:border-gray-700', 'pb-2');
+            if (el.tagName === 'H2') el.classList.add('text-xl', 'mt-5');
+            if (el.tagName === 'H3') el.classList.add('text-lg');
+          });
+
+          // 문단 스타일
+          content.querySelectorAll('p').forEach(el => {
+            el.classList.add('text-gray-700', 'dark:text-gray-300', 'my-2', 'leading-relaxed');
+          });
+
+          // 코드 블록 스타일
+          content.querySelectorAll('code').forEach(el => {
+            if (!el.parentElement.tagName === 'PRE') {
+              el.classList.add('bg-gray-100', 'dark:bg-[#2a2b2c]', 'px-1.5', 'py-0.5', 'rounded', 'text-sm', 'font-mono', 'text-red-600', 'dark:text-red-400');
+            }
+          });
+
+          // Pre/code 스타일
+          content.querySelectorAll('pre').forEach(el => {
+            el.classList.add('bg-gray-900', 'dark:bg-[#1a1b1c]', 'text-gray-100', 'p-4', 'rounded-lg', 'overflow-x-auto', 'my-3', 'font-mono', 'text-sm');
+          });
+
+          // 리스트 스타일
+          content.querySelectorAll('ul, ol').forEach(el => {
+            el.classList.add('my-2', 'ml-5', 'text-gray-700', 'dark:text-gray-300');
+            el.querySelectorAll('li').forEach(li => {
+              li.classList.add('my-1');
+            });
+          });
+
+          // 블록인용 스타일
+          content.querySelectorAll('blockquote').forEach(el => {
+            el.classList.add('border-l-4', 'border-gray-300', 'dark:border-gray-600', 'pl-4', 'my-3', 'text-gray-600', 'dark:text-gray-400', 'italic');
+          });
+
+          // 링크 스타일
+          content.querySelectorAll('a').forEach(el => {
+            el.classList.add('text-blue-600', 'dark:text-blue-400', 'hover:underline');
+          });
+
+          // 테이블 스타일
+          content.querySelectorAll('table').forEach(el => {
+            el.classList.add('w-full', 'border-collapse', 'my-3', 'border', 'border-gray-300', 'dark:border-gray-600');
+            el.querySelectorAll('th').forEach(th => {
+              th.classList.add('bg-gray-100', 'dark:bg-[#2a2b2c]', 'border', 'border-gray-300', 'dark:border-gray-600', 'px-3', 'py-2', 'text-left', 'font-semibold', 'text-gray-900', 'dark:text-gray-100');
+            });
+            el.querySelectorAll('td').forEach(td => {
+              td.classList.add('border', 'border-gray-300', 'dark:border-gray-600', 'px-3', 'py-2', 'text-gray-700', 'dark:text-gray-300');
+            });
+          });
+
+          // 수평선 스타일
+          content.querySelectorAll('hr').forEach(el => {
+            el.classList.add('my-4', 'border-t', 'border-gray-300', 'dark:border-gray-700');
+          });
+        }
+
+        onMounted(() => {
+          loadGuide();
+          loadComments();
+          // 마크다운 렌더링 후 스타일 적용
+          setTimeout(() => {
+            applyMarkdownStyles();
+          }, 100);
+        });
+
+        return {
+          guide, isLoading, error, comments, totalComments,
+          newComment, isCommentSubmitting, isLiking, contentCopied,
+          toast, renderedContent,
+          replyingToCommentId, replyContent, isReplySubmitting,
+          editingCommentId, editingCommentContent, isCommentUpdating,
+          toggleLike, copyContent, deleteGuide, addComment,
+          showReplyForm, cancelReplyForm, addReply,
+          startEditComment, cancelEditComment, updateComment, deleteComment,
+          formatDate, formatFileSize, handleMarkdownLinks
+        };
+      }
+    }).mount('#guideDetailApp');
+  </script>
+
+</body>
+</html>

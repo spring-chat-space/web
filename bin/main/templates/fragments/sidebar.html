@@ -96,6 +96,18 @@
       <span>사용자 관리</span>
     </a>
 
+    <!-- 가이드 버튼 (모든 사용자) -->
+    <a href="/guide"
+       class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#e2e8f4] dark:hover:bg-[#2a2b2c] text-gray-600 dark:text-gray-300 text-sm transition-colors group">
+      <div class="w-7 h-7 bg-green-100 dark:bg-green-900/40 rounded-lg flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332-.477-4.5-1.253"/>
+        </svg>
+      </div>
+      <span>가이드</span>
+    </a>
+
     <!-- 영수증 OCR 버튼 (ROLE_ADMIN 전용) -->
     <!-- <a th:if="${user != null and user.role == 'ROLE_ADMIN'}" -->
     <a

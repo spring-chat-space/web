@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>새 가이드 작성 - Chat Space</title>
+  <link rel="stylesheet" href="/common-ui/chat-vue.css">
+  <link rel="stylesheet" href="/css/chat.css">
+  <!-- EasyMDE 에디터 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+  <script src="/vendor/vue.global.prod.js"></script>
+  <script src="/vendor/axios.min.js"></script>
+  <script src="/common-ui/common-ui.umd.js"></script>
+  <!-- EasyMDE 에디터 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+</head>
+<body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
+
+  <!-- 사이드바 프래그먼트 -->
+  <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+
+  <!-- 사이드바 접혔을 때 펼치기 버튼 -->
+  <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="사이드바 펼치기"
+          class="absolute left-3 top-4 z-10 w-8 h-8 flex items-center justify-center bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-[#2a2b2c] text-gray-500 dark:text-gray-400 transition-all">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+    </svg>
+  </button>
+
+  <!-- ====== Vue 앱 영역 (가이드 작성 메인 콘텐츠) ====== -->
+  <main id="guideWriteApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
+
+    <!-- 페이지 헤더 -->
+    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">새 가이드 작성</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">새로운 가이드를 작성하고 공유하세요.</p>
+        </div>
+        <!-- 액션 버튼 그룹 -->
+        <div class="flex items-center gap-3">
+          <a href="/guide"
+             class="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-[#2a2b2c] transition-colors">
+            취소
+          </a>
+          <button @click="saveGuide"
+                  :disabled="isSaving || !formData.title.trim()"
+                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all"
+                  :class="!isSaving && formData.title.trim()
+                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'">
+            <span v-if="isSaving" class="flex items-center gap-2">
+              <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              저장 중...
+            </span>
+            <span v-else>저장</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 콘텐츠 영역 (스크롤 가능) -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="px-8 py-6 max-w-4xl mx-auto">
+
+        <!-- 폼 그룹 1: 제목 입력 -->
+        <div class="mb-6">
+          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            제목
+            <span class="text-red-500">*</span>
+          </label>
+          <input v-model="formData.title"
+                 type="text"
+                 placeholder="가이드 제목을 입력하세요"
+                 maxlength="200"
+                 class="w-full px-4 py-3 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" />
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+            {{ formData.title.length }} / 200자
+          </p>
+        </div>
+
+        <!-- 폼 그룹 2: 공개/비공개 토글 -->
+        <div class="mb-6">
+          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">공개 설정</label>
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-3 cursor-pointer group">
+              <input v-model="formData.isPublic"
+                     type="radio"
+                     value="Y"
+                     class="w-4 h-4 text-green-500 focus:ring-green-500" />
+              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">공개</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer group">
+              <input v-model="formData.isPublic"
+                     type="radio"
+                     value="N"
+                     class="w-4 h-4 text-green-500 focus:ring-green-500" />
+              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">비공개</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 폼 그룹 3: 파일 업로드 영역 -->
+        <div class="mb-6">
+          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">파일 첨부 (선택사항)</label>
+
+          <!-- 드래그 앤 드롭 영역 -->
+          <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer transition-all"
+               :class="isDraggingFile
+                 ? 'bg-green-50 dark:bg-green-900/10 border-green-400 dark:border-green-700'
+                 : 'hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-[#1a1b1c]'"
+               @click="triggerFileInput"
+               @dragover.prevent="isDraggingFile = true"
+               @dragleave.prevent="isDraggingFile = false"
+               @drop.prevent="handleFilesDrop">
+
+            <svg class="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">파일을 드래그하거나 클릭하여 업로드</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              MD, JPG, JPEG, PNG, GIF, PDF (최대 5개, 각 10MB)
+            </p>
+
+            <input ref="fileInputRef"
+                   type="file"
+                   multiple
+                   accept=".md,.jpg,.jpeg,.png,.gif,.pdf"
+                   class="hidden"
+                   @change="handleFilesChange" />
+          </div>
+
+          <!-- 업로드된 파일 목록 -->
+          <div v-if="selectedFiles.length > 0" class="mt-4 space-y-2">
+            <p class="text-xs font-medium text-gray-600 dark:text-gray-400">업로드할 파일</p>
+            <div class="space-y-1.5">
+              <div v-for="(file, idx) in selectedFiles" :key="idx"
+                   class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <span class="text-xs text-gray-600 dark:text-gray-400 truncate" :title="file.name" v-text="file.name"></span>
+                  <span class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0" v-text="`(${formatFileSize(file.size)})`"></span>
+                </div>
+                <button @click="removeFile(idx)"
+                        type="button"
+                        class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 폼 그룹 4: 마크다운 에디터 -->
+        <div class="mb-6">
+          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">내용</label>
+          <textarea id="guideEditor"
+                    v-model="formData.content"
+                    placeholder="마크다운 형식으로 내용을 작성하세요..."></textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <transition name="toast">
+      <div v-if="toast.msg"
+           class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-sm font-medium whitespace-nowrap"
+           :class="toast.type === 'success'
+             ? 'bg-green-800 dark:bg-green-900 text-white border-green-700 dark:border-green-800'
+             : 'bg-gray-900 dark:bg-[#2a2b2c] text-white border-gray-700'">
+        <svg v-if="toast.type === 'error'"
+             class="w-4 h-4 text-red-400 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <svg v-else
+             class="w-4 h-4 text-green-300 flex-shrink-0"
+             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span v-text="toast.msg"></span>
+      </div>
+    </transition>
+
+  </main>
+
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        // ─── 상태 (ref로 선언) ───
+        const fileInputRef     = ref(null);
+        const selectedFiles    = ref([]);
+        const isDraggingFile   = ref(false);
+        const isSaving         = ref(false);
+        const toast            = ref({ msg: '', type: 'error' });
+        let editor             = null;
+        let toastTimer         = null;
+
+        const formData = ref({
+          title: '',
+          content: '',
+          isPublic: 'Y'  // 기본값: 공개
+        });
+
+        // ─── 상수 ───
+        const ALLOWED_EXTENSIONS = ['md', 'jpg', 'jpeg', 'png', 'gif', 'pdf'];
+        const MAX_FILE_COUNT = 5;
+        const MAX_FILE_SIZE = 10 * 1024 * 1024;  // 10MB
+        const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
+
+        /**
+         * 토스트 메시지를 표시한다.
+         * 3초 후 자동으로 사라진다.
+         *
+         * @param {string} msg 표시할 메시지
+         * @param {string} type 토스트 타입 ('success' 또는 'error')
+         */
+        function showToast(msg, type = 'error') {
+          toast.value = { msg, type };
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => {
+            toast.value = { msg: '', type: 'error' };
+          }, 3000);
+        }
+
+        /**
+         * 파일 크기를 인간이 읽을 수 있는 형식으로 변환한다.
+         *
+         * @param {number} bytes 파일 크기 (바이트)
+         * @returns {string} 포맷된 파일 크기 (예: "1.5 MB")
+         */
+        function formatFileSize(bytes) {
+          if (bytes === 0) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return Math.round((bytes / Math.pow(k, i)) * 10) / 10 + ' ' + sizes[i];
+        }
+
+        /**
+         * 파일 입력을 트리거한다 (클릭)
+         */
+        function triggerFileInput() {
+          fileInputRef.value?.click();
+        }
+
+        /**
+         * 파일 입력 change 이벤트 핸들러
+         *
+         * @param {Event} event change 이벤트
+         */
+        function handleFilesChange(event) {
+          const files = Array.from(event.target.files || []);
+          addFiles(files);
+          // 다시 선택할 수 있도록 초기화
+          if (fileInputRef.value) fileInputRef.value.value = '';
+        }
+
+        /**
+         * 드래그앤드롭 drop 이벤트 핸들러
+         *
+         * @param {DragEvent} event drop 이벤트
+         */
+        function handleFilesDrop(event) {
+          isDraggingFile.value = false;
+          const files = Array.from(event.dataTransfer?.files || []);
+          addFiles(files);
+        }
+
+        /**
+         * 파일들을 selectedFiles에 추가한다.
+         * 유효성 검사: 파일 개수, 파일 크기, 파일 확장자
+         *
+         * @param {File[]} files 추가할 파일 배열
+         */
+        function addFiles(files) {
+          const validFiles = [];
+
+          for (const file of files) {
+            // 파일 개수 초과 확인
+            if (selectedFiles.value.length + validFiles.length >= MAX_FILE_COUNT) {
+              showToast(`최대 ${MAX_FILE_COUNT}개의 파일만 업로드할 수 있습니다.`, 'error');
+              break;
+            }
+
+            // 파일 크기 확인
+            if (file.size > MAX_FILE_SIZE) {
+              showToast(`${file.name}의 크기가 10MB를 초과합니다.`, 'error');
+              continue;
+            }
+
+            // 파일 확장자 확인
+            const ext = file.name.split('.').pop()?.toLowerCase();
+            if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+              showToast(`${file.name}은 지원되지 않는 파일 형식입니다.`, 'error');
+              continue;
+            }
+
+            validFiles.push(file);
+          }
+
+          // 총 파일 크기 확인
+          const totalSize = selectedFiles.value.reduce((sum, f) => sum + f.size, 0) +
+                           validFiles.reduce((sum, f) => sum + f.size, 0);
+          if (totalSize > MAX_TOTAL_SIZE) {
+            showToast('전체 파일 크기가 50MB를 초과합니다.', 'error');
+            return;
+          }
+
+          selectedFiles.value.push(...validFiles);
+        }
+
+        /**
+         * 선택된 파일 목록에서 파일을 제거한다.
+         *
+         * @param {number} index 제거할 파일의 인덱스
+         */
+        function removeFile(index) {
+          selectedFiles.value.splice(index, 1);
+        }
+
+        /**
+         * 가이드를 저장한다.
+         * 1. 파일이 있으면: POST /api/guide/file/upload
+         * 2. 가이드 등록: POST /api/guide/create
+         * 3. 성공 시: /guide/{guideSeq}로 이동
+         */
+        async function saveGuide() {
+          // 유효성 검사
+          if (!formData.value.title.trim()) {
+            showToast('제목을 입력하세요.', 'error');
+            return;
+          }
+
+          if (!editor || !editor.value()) {
+            showToast('내용을 입력하세요.', 'error');
+            return;
+          }
+
+          isSaving.value = true;
+          let fileGroupSeq = null;
+
+          try {
+            // 단계 1: 파일 업로드 (파일이 있는 경우)
+            if (selectedFiles.value.length > 0) {
+              const formDataForUpload = new FormData();
+              formDataForUpload.append('groupType', 'GUIDE');
+              selectedFiles.value.forEach(file => {
+                formDataForUpload.append('files', file);
+              });
+
+              const uploadResponse = await axios.post('/api/guide/file/upload', formDataForUpload, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+
+              if (uploadResponse.data?.success) {
+                fileGroupSeq = uploadResponse.data.result?.fileGroupSeq ?? null;
+              } else {
+                showToast(uploadResponse.data?.message || '파일 업로드에 실패했습니다.', 'error');
+                return;
+              }
+            }
+
+            // 단계 2: 가이드 등록
+            const guidePayload = {
+              title: formData.value.title.trim(),
+              content: editor.value(),
+              isPublic: formData.value.isPublic,
+              fileGroupSeq: fileGroupSeq
+            };
+
+            const guideResponse = await axios.post('/api/guide/create', guidePayload);
+
+            if (guideResponse.data?.success && guideResponse.data.result) {
+              showToast('가이드가 저장되었습니다.', 'success');
+              // 단계 3: 상세 페이지로 이동 (2초 후)
+              setTimeout(() => {
+                window.location.href = `/guide/${guideResponse.data.result}`;
+              }, 500);
+            } else {
+              showToast(guideResponse.data?.message || '가이드 등록에 실패했습니다.', 'error');
+            }
+          } catch (err) {
+            console.error('가이드 저장 오류:', err);
+            showToast(err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.', 'error');
+          } finally {
+            isSaving.value = false;
+          }
+        }
+
+        /**
+         * EasyMDE 에디터를 초기화한다.
+         * onMounted 콜백에서 호출된다.
+         */
+        function initializeEditor() {
+          if (typeof EasyMDE === 'undefined') {
+            console.error('EasyMDE 라이브러리가 로드되지 않았습니다.');
+            return;
+          }
+
+          editor = new EasyMDE({
+            element: document.getElementById('guideEditor'),
+            spellChecker: false,
+            autofocus: false,
+            autoDownloadFontAwesome: false,
+            forceSync: true,
+            hideIcons: ['guide', 'side-by-side', 'fullscreen'],
+            showIcons: ['code', 'table'],
+            indentWithTabs: false,
+            tabSize: 2,
+            lineWrapping: true,
+            previewRender: (plainText) => {
+              // 마크다운 미리보기 처리 (marked 라이브러리 사용 가능)
+              return plainText;
+            },
+            toolbar: [
+              'bold', 'italic', 'strikethrough', '|',
+              'heading', 'quote', '|',
+              'unordered-list', 'ordered-list', '|',
+              'link', 'image', 'code', 'table', '|',
+              'preview', 'undo', 'redo'
+            ]
+          });
+
+          // 에디터 내용과 formData.content 동기화
+          editor.codemirror.on('change', () => {
+            formData.value.content = editor.value();
+          });
+        }
+
+        // ─── 라이프사이클 ───
+        onMounted(() => {
+          // EasyMDE 라이브러리 로드 대기 및 초기화
+          let retries = 0;
+          const initInterval = setInterval(() => {
+            if (typeof EasyMDE !== 'undefined') {
+              clearInterval(initInterval);
+              initializeEditor();
+            } else if (retries++ > 10) {
+              clearInterval(initInterval);
+              console.warn('EasyMDE 라이브러리 로드 실패. 텍스트 에어리어만 사용합니다.');
+            }
+          }, 100);
+        });
+
+        // ─── 반환: 템플릿에 노출할 항목 ───
+        return {
+          fileInputRef,
+          selectedFiles,
+          isDraggingFile,
+          isSaving,
+          formData,
+          toast,
+          triggerFileInput,
+          handleFilesChange,
+          handleFilesDrop,
+          removeFile,
+          saveGuide,
+          formatFileSize,
+          showToast
+        };
+      }
+    }).mount('#guideWriteApp');
+  </script>
+
+</body>
+</html>
