@@ -73,7 +73,7 @@
 
             <div class="text-center">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-200">영수증 이미지를 드래그하거나<br>클릭하여 업로드</p>
-              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">JPG · PNG · WEBP · 최대 10MB</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">JPG · PNG · WEBP · 최대 20MB</p>
             </div>
 
             <input ref="fileInput"
@@ -338,25 +338,6 @@
                      placeholder="0" />
             </div>
 
-            <!-- 저장하기 버튼 -->
-            <div class="flex gap-3">
-              <button @click="saveData"
-                      :disabled="isSaving"
-                      class="flex-1 py-2.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2"
-                      :class="isSaving
-                        ? 'bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed'
-                        : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'">
-                <span v-if="isSaving" class="flex items-center gap-2">
-                  <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                  저장 중...
-                </span>
-                <span v-else>저장하기</span>
-              </button>
-            </div>
-
           </template>
         </div>
 
@@ -435,7 +416,6 @@
         const toast           = ref({ msg: '', type: 'error' });
         const imageModalOpen  = ref(false);
         const previewImgRef   = ref(null);
-        const isSaving        = ref(false);
         const editData        = ref({
           merchant: { name: '', biz_number: '', address: '', tel: '' },
           transaction_date: '',
@@ -644,31 +624,6 @@
         });
 
         /**
-         * 수정된 데이터를 서버에 저장한다.
-         * POST /api/ocr/receipt/save로 editData를 전송한다.
-         */
-        async function saveData() {
-          if (isSaving.value || !editData.value) return;
-          isSaving.value = true;
-
-          try {
-            const response = await axios.post('/api/ocr/receipt/save', editData.value);
-
-            if (response.data?.success) {
-              showToast('저장되었습니다.', 'success');
-            } else {
-              showToast(response.data?.message || '저장에 실패했습니다.', 'error');
-            }
-          } catch (err) {
-            console.error('데이터 저장 오류:', err);
-            const errorMsg = err.response?.data?.message || '서버와 통신 중 오류가 발생했습니다.';
-            showToast(errorMsg, 'error');
-          } finally {
-            isSaving.value = false;
-          }
-        }
-
-        /**
          * 금액을 한국 원화 형식으로 포맷한다.
          *
          * @param {number|null} amount 금액
@@ -700,11 +655,11 @@
         return {
           fileInput, selectedFile, previewUrl, fileName,
           isDragging, isLoading, result, apiError, copied,
-          toast, imageModalOpen, previewImgRef, isSaving,
+          toast, imageModalOpen, previewImgRef,
           editData, magnifier,
           triggerFileInput, handleFileChange, handleDrop,
           clearImage, resetAll, analyzeReceipt, formatAmount, copyJson,
-          handleMagnifierMove, saveData, showToast
+          handleMagnifierMove, showToast
         };
       }
     }).mount('#ocrApp');
