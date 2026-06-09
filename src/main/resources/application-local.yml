@@ -1,5 +1,0 @@
-server:
-  port: 8080
-
-was:
-  base-url: http://localhost:8081
