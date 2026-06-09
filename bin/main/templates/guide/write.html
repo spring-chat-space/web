@@ -14,6 +14,7 @@
   <script src="/vendor/axios.min.js"></script>
   <script src="/common-ui/common-ui.umd.js"></script>
   <script src="/plugins/easymde/easymde.min.js"></script>
+  <script src="/vendor/marked.min.js"></script>
 </head>
 <body class="h-screen flex overflow-hidden bg-white dark:bg-[#131314] font-sans antialiased">
 
@@ -29,147 +30,155 @@
   </button>
 
   <!-- ====== Vue 앱 영역 (가이드 작성 메인 콘텐츠) ====== -->
-  <main id="guideWriteApp" v-cloak class="flex-1 flex flex-col h-full overflow-hidden">
+  <main id="guideWriteApp" v-cloak class="flex-1 overflow-y-auto bg-white dark:bg-[#131314]">
 
-    <!-- 페이지 헤더 -->
-    <div class="px-8 py-5 border-b border-gray-200 dark:border-gray-700/50 bg-white dark:bg-[#131314]">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">새 가이드 작성</h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">새로운 가이드를 작성하고 공유하세요.</p>
-        </div>
-        <!-- 액션 버튼 그룹 -->
-        <div class="flex items-center gap-3">
-          <a href="/guide"
-             class="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-[#2a2b2c] transition-colors">
-            취소
-          </a>
-          <button @click="saveGuide"
-                  :disabled="isSaving || !formData.title.trim()"
-                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                  :class="!isSaving && formData.title.trim()
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    disabled:opacity-50 disabled:cursor-not-allowed">
-            <span v-if="isSaving" class="flex items-center gap-2">
-              <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-              저장 중...
-            </span>
-            <span v-else>저장</span>
-          </button>
-        </div>
+    <div class="p-8 max-w-5xl mx-auto">
+
+      <!-- 제목 입력 (플랫 레이아웃, 하단 border만) -->
+      <input v-model="formData.title"
+             type="text"
+             placeholder="제목을 입력하세요"
+             maxlength="200"
+             class="w-full text-3xl font-bold text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 bg-transparent border-0 border-b border-gray-200 dark:border-gray-700 pb-4 mb-6 focus:outline-none focus:border-blue-500 transition-colors" />
+
+      <!-- 공개 설정 (인라인, 플랫 레이아웃) -->
+      <div class="flex items-center justify-between mb-6 py-3 border-b border-gray-100 dark:border-gray-800">
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">공개 설정</span>
+        <button type="button"
+                @click="formData.isPublic = formData.isPublic === 'Y' ? 'N' : 'Y'"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                :class="formData.isPublic === 'Y'
+                  ? 'bg-green-500 hover:bg-green-600'
+                  : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-700'">
+          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                :class="formData.isPublic === 'Y' ? 'translate-x-6' : 'translate-x-1'"></span>
+        </button>
       </div>
-    </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-6">
+        {{ formData.isPublic === 'Y' ? '이 가이드는 공개됩니다.' : '이 가이드는 비공개됩니다.' }}
+      </p>
 
-    <!-- 콘텐츠 영역 (스크롤 가능) -->
-    <div class="flex-1 overflow-y-auto">
-      <div class="px-8 py-6 max-w-4xl mx-auto">
+      <!-- 파일 업로드 (플랫 레이아웃) -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">파일 첨부</label>
 
-        <!-- 폼 그룹 1: 제목 입력 -->
-        <div class="mb-6">
-          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            제목
-            <span class="text-red-500">*</span>
-          </label>
-          <input v-model="formData.title"
-                 type="text"
-                 placeholder="가이드 제목을 입력하세요"
-                 maxlength="200"
-                 class="w-full px-4 py-3 bg-white dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-colors" />
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-            {{ formData.title.length }} / 200자
+        <!-- 드래그 앤 드롭 영역 -->
+        <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer transition-all"
+             :class="isDraggingFile
+               ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-400 dark:border-blue-700'
+               : 'hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-[#1a1b1c]'"
+             @click="triggerFileInput"
+             @dragover.prevent="isDraggingFile = true"
+             @dragleave.prevent="isDraggingFile = false"
+             @drop.prevent="handleFilesDrop">
+
+          <svg class="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">파일을 드래그하거나 클릭하여 업로드</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            MD, JPG, JPEG, PNG, GIF, PDF (최대 5개, 각 10MB)
           </p>
+
+          <input ref="fileInputRef"
+                 type="file"
+                 multiple
+                 accept=".md,.jpg,.jpeg,.png,.gif,.pdf"
+                 class="hidden"
+                 @change="handleFilesChange" />
         </div>
 
-        <!-- 폼 그룹 2: 공개/비공개 토글 -->
-        <div class="mb-6">
-          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">공개 설정</label>
-          <div class="flex items-center gap-4">
-            <label class="flex items-center gap-3 cursor-pointer group">
-              <input v-model="formData.isPublic"
-                     type="radio"
-                     value="Y"
-                     class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
-              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">공개</span>
-            </label>
-            <label class="flex items-center gap-3 cursor-pointer group">
-              <input v-model="formData.isPublic"
-                     type="radio"
-                     value="N"
-                     class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
-              <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">비공개</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- 폼 그룹 3: 파일 업로드 영역 -->
-        <div class="mb-6">
-          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">파일 첨부 (선택사항)</label>
-
-          <!-- 드래그 앤 드롭 영역 -->
-          <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center cursor-pointer transition-all"
-               :class="isDraggingFile
-                 ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-400 dark:border-blue-700'
-                 : 'hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-[#1a1b1c]'"
-               @click="triggerFileInput"
-               @dragover.prevent="isDraggingFile = true"
-               @dragleave.prevent="isDraggingFile = false"
-               @drop.prevent="handleFilesDrop">
-
-            <svg class="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-            </svg>
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">파일을 드래그하거나 클릭하여 업로드</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              MD, JPG, JPEG, PNG, GIF, PDF (최대 5개, 각 10MB)
-            </p>
-
-            <input ref="fileInputRef"
-                   type="file"
-                   multiple
-                   accept=".md,.jpg,.jpeg,.png,.gif,.pdf"
-                   class="hidden"
-                   @change="handleFilesChange" />
-          </div>
-
-          <!-- 업로드된 파일 목록 -->
-          <div v-if="selectedFiles.length > 0" class="mt-4 space-y-2">
-            <p class="text-xs font-medium text-gray-600 dark:text-gray-400">업로드할 파일</p>
-            <div class="space-y-1.5">
-              <div v-for="(file, idx) in selectedFiles" :key="idx"
-                   class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-[#1e1f20] border border-gray-200 dark:border-gray-700 rounded-lg">
-                <div class="flex items-center gap-2 flex-1 min-w-0">
-                  <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                  </svg>
-                  <span class="text-xs text-gray-600 dark:text-gray-400 truncate" :title="file.name" v-text="file.name"></span>
-                  <span class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0" v-text="`(${formatFileSize(file.size)})`"></span>
-                </div>
-                <button @click="removeFile(idx)"
-                        type="button"
-                        class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
+        <!-- 업로드된 파일 목록 -->
+        <div v-if="selectedFiles.length > 0" class="mt-4 space-y-2">
+          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">업로드할 파일</p>
+          <div class="space-y-1.5">
+            <div v-for="(file, idx) in selectedFiles" :key="idx"
+                 class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span class="text-xs text-gray-600 dark:text-gray-400 truncate" :title="file.name" v-text="file.name"></span>
+                <span class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0" v-text="`(${formatFileSize(file.size)})`"></span>
               </div>
+              <button @click="removeFile(idx)"
+                      type="button"
+                      class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- 폼 그룹 4: 마크다운 에디터 -->
-        <div class="mb-6">
-          <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">내용</label>
-          <textarea id="guideEditor"
-                    v-model="formData.content"
-                    placeholder="마크다운 형식으로 내용을 작성하세요..."></textarea>
+      <!-- 마크다운 에디터 (플랫 레이아웃) -->
+      <div class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">내용</label>
+          <!-- 에디터 위 미리보기 버튼: 클릭 시 마크다운 렌더링 모달 오픈 -->
+          <button type="button"
+                  @click="openPreviewModal"
+                  class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-[#2a2b2c] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-[#363738] transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            미리보기
+          </button>
         </div>
+        <textarea id="guideEditor"
+                  v-model="formData.content"
+                  placeholder="마크다운 형식으로 내용을 작성하세요..."></textarea>
+      </div>
 
+      <!-- 하단 액션 버튼 (취소 / 저장) -->
+      <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <a href="/guide"
+           class="px-6 py-2.5 text-sm font-medium border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          취소
+        </a>
+        <button @click="saveGuide"
+                :disabled="isSaving || !formData.title.trim()"
+                class="flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg transition-colors"
+                :class="!isSaving && formData.title.trim()
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-100 dark:bg-[#2a2b2c] text-gray-400 cursor-not-allowed'">
+          <span v-if="isSaving" class="flex items-center gap-2">
+            <svg class="w-4 h-4 spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            저장 중...
+          </span>
+          <span v-else>저장</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- 미리보기 모달 -->
+    <div v-if="showPreviewModal"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closePreviewModal"></div>
+      <div class="relative w-full max-w-3xl max-h-[80vh] bg-white dark:bg-[#1e1f20] rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col overflow-hidden">
+        <!-- 모달 헤더 -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700/50 flex-shrink-0">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">미리보기</h3>
+          <button @click="closePreviewModal"
+                  class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2b2c] transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <!-- 모달 콘텐츠: 마크다운 렌더링 결과 -->
+        <div class="flex-1 overflow-y-auto px-8 py-6 markdown-body"
+             v-html="previewHtml">
+        </div>
       </div>
     </div>
 
@@ -178,7 +187,7 @@
   <script>
     if (typeof CommonUI !== 'undefined') CommonUI.install();
 
-    const { createApp, ref, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted } = Vue;
 
     createApp({
       setup() {
@@ -187,6 +196,7 @@
         const selectedFiles    = ref([]);
         const isDraggingFile   = ref(false);
         const isSaving         = ref(false);
+        const showPreviewModal = ref(false);
         let editor             = null;
 
         const formData = ref({
@@ -200,6 +210,21 @@
         const MAX_FILE_COUNT = 5;
         const MAX_FILE_SIZE = 10 * 1024 * 1024;  // 10MB
         const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
+
+        /**
+         * 미리보기 모달에 표시할 마크다운 렌더링 HTML.
+         * formData.content가 변경될 때 자동으로 최신 내용을 반영한다.
+         */
+        const previewHtml = computed(() => {
+          if (!showPreviewModal.value) return '';
+          const content = formData.value.content || '';
+          if (!content.trim()) return '<p style="color:#9ca3af;text-align:center;padding:2rem">작성된 내용이 없습니다.</p>';
+          try {
+            return marked.parse(content);
+          } catch (e) {
+            return content;
+          }
+        });
 
         /**
          * 파일 크기를 인간이 읽을 수 있는 형식으로 변환한다.
@@ -351,7 +376,7 @@
 
             if (guideResponse.data?.success && guideResponse.data.result) {
               CommonUI.toast('가이드가 저장되었습니다.', { type: 'success' });
-              // 단계 3: 상세 페이지로 이동 (2초 후)
+              // 단계 3: 상세 페이지로 이동
               setTimeout(() => {
                 window.location.href = `/guide/${guideResponse.data.result}`;
               }, 500);
@@ -364,6 +389,20 @@
           } finally {
             isSaving.value = false;
           }
+        }
+
+        /**
+         * 미리보기 모달을 연다.
+         */
+        function openPreviewModal() {
+          showPreviewModal.value = true;
+        }
+
+        /**
+         * 미리보기 모달을 닫는다.
+         */
+        function closePreviewModal() {
+          showPreviewModal.value = false;
         }
 
         /**
@@ -382,21 +421,16 @@
             autofocus: false,
             autoDownloadFontAwesome: false,
             forceSync: true,
-            hideIcons: ['guide', 'side-by-side', 'fullscreen'],
-            showIcons: ['code', 'table'],
             indentWithTabs: false,
             tabSize: 2,
             lineWrapping: true,
-            previewRender: (plainText) => {
-              // 마크다운 미리보기 처리 (marked 라이브러리 사용 가능)
-              return plainText;
-            },
+            // 내장 preview/side-by-side 버튼 제거: 에디터 위 전용 미리보기 버튼으로 대체
             toolbar: [
               'bold', 'italic', 'strikethrough', '|',
               'heading', 'quote', '|',
               'unordered-list', 'ordered-list', '|',
               'link', 'image', 'code', 'table', '|',
-              'preview', 'undo', 'redo'
+              'undo', 'redo'
             ]
           });
 
@@ -428,12 +462,16 @@
           isDraggingFile,
           isSaving,
           formData,
+          showPreviewModal,
+          previewHtml,
           triggerFileInput,
           handleFilesChange,
           handleFilesDrop,
           removeFile,
           saveGuide,
           formatFileSize,
+          openPreviewModal,
+          closePreviewModal,
         };
       }
     }).mount('#guideWriteApp');
